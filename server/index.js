@@ -4,6 +4,7 @@ import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,6 +17,41 @@ const PORT = 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Helper to auto-link manual download sources from ~/Downloads into ~/.cache/paru/clone/<pkg>/
+function autoLinkDownloadSources(pkg, requiredFile = null) {
+  const downloadsDir = path.join(os.homedir(), 'Downloads');
+  const cloneDir = path.join(os.homedir(), '.cache', 'paru', 'clone', pkg);
+
+  try {
+    if (!fs.existsSync(cloneDir)) {
+      fs.mkdirSync(cloneDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(downloadsDir)) return;
+    const files = fs.readdirSync(downloadsDir);
+    for (const f of files) {
+      if (requiredFile && f.toLowerCase() === requiredFile.toLowerCase()) {
+        const src = path.join(downloadsDir, f);
+        const dest = path.join(cloneDir, f);
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(src, dest);
+          console.log(`[Aura Smart Link] Auto-linked ${f} into build directory`);
+        }
+      } else if (!requiredFile && f.toLowerCase().includes(pkg.toLowerCase().replace(/-(?:bin|git)$/, ''))) {
+        const src = path.join(downloadsDir, f);
+        const dest = path.join(cloneDir, f);
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(src, dest);
+          console.log(`[Aura Smart Link] Auto-linked ${f} into build directory`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Aura Smart Link Error]', err);
+  }
+}
+
 
 // --- AUR RPC v5 Proxy ---
 app.get('/api/search', async (req, res) => {
@@ -92,6 +128,11 @@ app.get('/api/install', (req, res) => {
 
   send('status', `Starting ${action} for ${pkg}...`);
 
+  // Pre-check and auto-link any downloaded sources from ~/Downloads into build cache
+  if (action === 'install') {
+    autoLinkDownloadSources(pkg);
+  }
+
   let cmd, args;
   if (action === 'remove') {
     cmd = 'pkexec';
@@ -111,8 +152,26 @@ app.get('/api/install', (req, res) => {
   });
 
   activeInstalls.set(pkg, child);
-  child.stdout.on('data', d => send('log', d.toString()));
-  child.stderr.on('data', d => send('log', d.toString()));
+  child.stdout.on('data', d => {
+    const text = d.toString();
+    send('log', text);
+    if (text.includes('was not found in the build directory and is not a URL')) {
+      const match = text.match(/ERROR:\s*([^\s]+)\s*was not found/i);
+      if (match) {
+        autoLinkDownloadSources(pkg, match[1]);
+      }
+    }
+  });
+  child.stderr.on('data', d => {
+    const text = d.toString();
+    send('log', text);
+    if (text.includes('was not found in the build directory and is not a URL')) {
+      const match = text.match(/ERROR:\s*([^\s]+)\s*was not found/i);
+      if (match) {
+        autoLinkDownloadSources(pkg, match[1]);
+      }
+    }
+  });
   child.on('close', code => {
     activeInstalls.delete(pkg);
     send('done', code === 0 ? 'success' : 'error');
@@ -129,6 +188,15 @@ app.get('/api/install', (req, res) => {
     }
   });
 });
+
+// --- Open Downloads Folder ---
+app.post('/api/open-downloads', (req, res) => {
+  const downloadsDir = path.join(os.homedir(), 'Downloads');
+  const child = spawn('xdg-open', [downloadsDir], { detached: true, stdio: 'ignore' });
+  child.unref();
+  res.json({ ok: true });
+});
+
 
 // --- Launch installed app ---
 app.post('/api/launch', (req, res) => {

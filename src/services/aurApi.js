@@ -92,6 +92,17 @@ export const launchApp = async (pkg) => {
   }
 };
 
+export const openDownloadsFolder = async () => {
+  try {
+    const res = await fetch(`${API}/api/open-downloads`, { method: 'POST' });
+    return res.json();
+  } catch {
+    return { ok: false };
+  }
+};
+
+
+
 
 export const getUpdates = async () => {
   const res = await fetch(`${API}/api/updates`);
