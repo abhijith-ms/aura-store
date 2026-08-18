@@ -1,0 +1,21 @@
+[Desktop Entry]
+Name=Aura Store
+GenericName=AUR Package Manager
+Comment=Apple-inspired Glassmorphism AUR Store for Arch Linux & CachyOS
+Exec=/home/abhijithms/.local/bin/aura-store %U
+Icon=aura-store
+Terminal=false
+Type=Application
+Categories=System;PackageManager;Utility;
+Keywords=aur;store;arch;package;pacman;paru;software;apps;
+StartupNotify=true
+StartupWMClass=aura-store
+Actions=Updates;Installed;
+
+[Desktop Action Updates]
+Name=Check for Updates
+Exec=/home/abhijithms/.local/bin/aura-store
+
+[Desktop Action Installed]
+Name=Manage Installed Apps
+Exec=/home/abhijithms/.local/bin/aura-store
