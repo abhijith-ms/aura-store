@@ -1,8 +1,8 @@
-import { getPackageIcon, formatNumber } from '../services/aurApi';
+import { formatNumber } from '../services/aurApi';
+import AppIcon from './AppIcon';
 
 export default function AppCard({ pkg, installed, onSelect, onQuickInstall, index = 0, rank = null }) {
   const isInstalled = installed.has(pkg.Name);
-  const icon = getPackageIcon(pkg.Name);
 
   const handleInstallClick = (e) => {
     e.stopPropagation();
@@ -21,7 +21,7 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall, inde
             {rank}
           </div>
         )}
-        <div className={`card-icon ${isInstalled ? 'installed-icon' : ''}`}>{icon}</div>
+        <AppIcon pkgName={pkg.Name} size="md" installed={isInstalled} />
         <div className="card-title-block">
           <div className="card-name">{pkg.Name}</div>
           <div className="card-version">v{pkg.Version}</div>

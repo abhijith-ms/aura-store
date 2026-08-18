@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { getPkgbuild, streamInstall, formatNumber, timeAgo, getPackageIcon } from '../services/aurApi';
+import { getPkgbuild, streamInstall, formatNumber, timeAgo } from '../services/aurApi';
+import AppIcon from './AppIcon';
 
 export default function PackageDetail({ pkg, installed, onClose, onInstallStart, onInstallDone, onSelectDependency, addToast }) {
   const [tab, setTab] = useState('info');
@@ -61,7 +62,7 @@ export default function PackageDetail({ pkg, installed, onClose, onInstallStart,
       <div className="modal">
         {/* Header */}
         <div className="modal-header">
-          <div className="modal-icon">{icon}</div>
+          <AppIcon pkgName={pkg.Name} size="lg" installed={isInstalled} />
           <div className="modal-meta">
             <div className="modal-name">{pkg.Name}</div>
             <div className="modal-subtitle">

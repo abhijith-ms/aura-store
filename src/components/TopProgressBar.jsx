@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { getPackageIcon } from '../services/aurApi';
+import AppIcon from './AppIcon';
 
 export default function TopProgressBar({
   active,
@@ -86,7 +86,7 @@ export default function TopProgressBar({
           <div className="top-progress-spinner">
             <div className="spinner-apple" />
           </div>
-          <div className="top-progress-icon">{icon}</div>
+          <AppIcon pkgName={pkgName} size="sm" />
           <div className="top-progress-meta">
             <div className="top-progress-title">
               {action === 'remove' ? 'Removing' : 'Updating'}: <span className="top-progress-name">{pkgName}</span>

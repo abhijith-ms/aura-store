@@ -4,6 +4,7 @@ import AppCard from './components/AppCard';
 import PackageDetail from './components/PackageDetail';
 import TerminalDrawer from './components/TerminalDrawer';
 import TopProgressBar from './components/TopProgressBar';
+import AppIcon from './components/AppIcon';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
   streamInstall, FEATURED, TRENDING_NAMES, CATEGORIES, getPackageIcon, formatNumber, timeAgo
@@ -50,7 +51,7 @@ function InstalledTab({ packages, onSelect }) {
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--fill-primary)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--separator)'}
           >
-            <div style={{ fontSize: 24 }}>{getPackageIcon(pkg.name)}</div>
+            <AppIcon pkgName={pkg.name} size="md" installed={true} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--label-primary)' }}>{pkg.name}</div>
               <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'var(--font-mono)' }}>v{pkg.version}</div>
@@ -121,7 +122,7 @@ function UpdatesTab({
               background: 'var(--fill-quaternary)', border: '1px solid var(--separator)',
               borderRadius: 'var(--radius-lg)'
             }}>
-              <div style={{ fontSize: 22 }}>{getPackageIcon(u.name)}</div>
+              <AppIcon pkgName={u.name} size="md" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 13.5 }}>{u.name}</div>
                 <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'var(--font-mono)' }}>
@@ -163,7 +164,7 @@ function HeroCard({ pkg, installed, onSelect, onInstall }) {
   if (!pkg.data) return null;
   return (
     <div className="hero" onClick={() => onSelect(pkg.data)}>
-      <div className="hero-icon">{getPackageIcon(pkg.name)}</div>
+      <AppIcon pkgName={pkg.data.Name} size="hero" installed={isInstalled} />
       <div className="hero-info">
         <div className="hero-label">{pkg.label}</div>
         <div className="hero-name">{pkg.data.Name}</div>

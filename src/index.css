@@ -1100,3 +1100,69 @@ html, body, #root {
   animation: spin 0.7s linear infinite;
 }
 
+/* ── App Logo & Icon System ── */
+.app-icon-container {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--separator);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.2s var(--ease-apple), box-shadow 0.2s var(--ease-apple);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.app-icon-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.app-icon-md {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 22px;
+}
+
+.app-icon-lg {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  font-size: 32px;
+}
+
+.app-icon-hero {
+  width: 76px;
+  height: 76px;
+  border-radius: 20px;
+  font-size: 38px;
+}
+
+.app-icon-img {
+  width: 65%;
+  height: 65%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+  transition: opacity 0.25s ease, transform 0.2s var(--ease-apple);
+}
+
+.app-icon-img.loading {
+  opacity: 0;
+}
+
+.app-icon-img.loaded {
+  opacity: 1;
+}
+
+.app-icon-fallback-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+
