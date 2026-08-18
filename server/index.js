@@ -130,6 +130,42 @@ app.get('/api/install', (req, res) => {
   });
 });
 
+// --- Launch installed app ---
+app.post('/api/launch', (req, res) => {
+  const { pkg } = req.body;
+  if (!pkg) return res.status(400).json({ error: 'pkg required' });
+
+  // Map known package names to executable/desktop commands if needed
+  const binMap = {
+    'visual-studio-code-bin': 'code',
+    'zen-browser-bin': 'zen-browser',
+    'brave-bin': 'brave',
+    'google-chrome': 'google-chrome-stable',
+    'spotify': 'spotify',
+    'discord': 'discord',
+    'telegram-desktop': 'telegram-desktop',
+    'obs-studio-git': 'obs',
+    'steam': 'steam',
+    'postman-bin': 'postman',
+    'sublime-text-4': 'subl',
+  };
+
+  const target = binMap[pkg] || pkg.replace(/-(?:bin|git)$/, '');
+  const child = spawn('gtk-launch', [target], { detached: true, stdio: 'ignore' });
+  child.unref();
+
+  child.on('error', () => {
+    // Fallback: direct binary execution detached
+    try {
+      const fallback = spawn(target, [], { detached: true, stdio: 'ignore' });
+      fallback.unref();
+    } catch {}
+  });
+
+  res.json({ ok: true, launched: target });
+});
+
+
 // --- PKGBUILD preview from AUR ---
 app.get('/api/pkgbuild', async (req, res) => {
   const { pkg } = req.query;
@@ -147,3 +183,4 @@ app.get('/api/pkgbuild', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Aura Store backend running on http://localhost:${PORT}`);
 });
+

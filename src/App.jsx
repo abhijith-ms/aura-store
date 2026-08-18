@@ -8,23 +8,19 @@ import AppIcon from './components/AppIcon';
 import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
-  streamInstall, TRENDING_NAMES, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
+  streamInstall, launchApp, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
 } from './services/aurApi';
 
-// Top curated popular packages (4-8 items)
+// Top curated popular packages (exactly 4 items for a clean single row)
 const CURATED_POPULAR = [
   'visual-studio-code-bin',
   'spotify',
   'zen-browser-bin',
-  'discord',
   'google-chrome',
-  'brave-bin',
-  'steam',
-  'obs-studio-git',
 ];
 
-// Essential CLI tools list for secondary Explore rail
-const ESSENTIAL_TOOLS = ['paru', 'yay', 'btop', 'fastfetch-git', 'alacritty-git', 'timeshift'];
+// Essential CLI tools list (exactly 4 items)
+const CURATED_ESSENTIALS = ['paru', 'fastfetch-git', 'btop', 'alacritty-git'];
 
 // ---------- Toast Notifications ----------
 function ToastStack({ toasts }) {
@@ -64,8 +60,8 @@ function SkeletonGrid({ count = 4, popular = false }) {
   );
 }
 
-// ---------- Installed Library View (with search filter) ----------
-function InstalledTab({ packages, onSelect }) {
+// ---------- Installed Library View (Package Manager utility design) ----------
+function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
   const [filter, setFilter] = useState('');
 
   const filtered = useMemo(() => {
@@ -130,7 +126,7 @@ function InstalledTab({ packages, onSelect }) {
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--surface-hover)'; }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-focus)'; e.currentTarget.style.background = 'var(--surface-hover)'; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--surface)'; }}
               >
                 <AppIcon pkgName={pkg.name} size="sm" installed={true} />
@@ -140,7 +136,23 @@ function InstalledTab({ packages, onSelect }) {
                     {pkg.name} · v{pkg.version}
                   </div>
                 </div>
-                <span className="chip chip-green">✓ Installed</span>
+
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => onLaunch(pkg.name, displayName)}
+                    title={`Launch ${displayName}`}
+                  >
+                    Open
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => onSelect({ Name: pkg.name, Version: pkg.version, Description: 'Locally installed AUR package' })}
+                    title="View package details"
+                  >
+                    Details
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -332,7 +344,7 @@ function MainApp() {
   useEffect(() => {
     refreshPackages();
     getMultiplePackageInfo(CURATED_POPULAR).then(setPopularPkgs);
-    getMultiplePackageInfo(ESSENTIAL_TOOLS).then(setEssentialPkgs);
+    getMultiplePackageInfo(CURATED_ESSENTIALS).then(setEssentialPkgs);
   }, [refreshPackages]);
 
   // Global Keyboard Shortcuts (Ctrl+K and Escape)
@@ -456,6 +468,11 @@ function MainApp() {
     runPackageAction(pkg.Name, 'install');
   };
 
+  const handleLaunchApp = async (pkgName, displayName) => {
+    addToast(`Launching ${displayName}…`, 'info');
+    await launchApp(pkgName);
+  };
+
   const handleDependencyClick = async (depName) => {
     setLoading(true);
     const info = await getPackageInfo(depName);
@@ -545,9 +562,12 @@ function MainApp() {
             <PackageDetail
               pkg={selectedPkg}
               installed={installed}
+              isInstalling={isProcessing && activePkg === selectedPkg.Name}
+              installLogs={termLogs}
               onBack={() => setSelectedPkg(null)}
               onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
               onSelectDependency={handleDependencyClick}
+              onToggleTerminal={() => setTermOpen(o => !o)}
               addToast={addToast}
             />
           ) : isSearching ? (
@@ -595,11 +615,11 @@ function MainApp() {
                 </p>
               </div>
 
-              {/* Popular on AUR Rail (Prominent 4-column layout) */}
+              {/* Popular on AUR Rail (Clean single row of 4 items) */}
               <div>
                 <div className="section-header">
                   <div className="section-title">Popular on AUR</div>
-                  <div className="section-count">{popularPkgs.length} packages</div>
+                  <div className="section-count">4 packages</div>
                 </div>
                 {popularPkgs.length === 0 ? (
                   <SkeletonGrid count={4} popular={true} />
@@ -619,11 +639,11 @@ function MainApp() {
                 )}
               </div>
 
-              {/* Essential Tools Rail */}
+              {/* Essential Tools Rail (Clean single row of 4 items) */}
               <div>
                 <div className="section-header">
                   <div className="section-title">System & CLI Essentials</div>
-                  <div className="section-count">{essentialPkgs.length} utilities</div>
+                  <div className="section-count">4 utilities</div>
                 </div>
                 {essentialPkgs.length === 0 ? (
                   <SkeletonGrid count={4} />
@@ -644,13 +664,13 @@ function MainApp() {
               </div>
             </>
           ) : currentCategory ? (
-            /* Category View */
+            /* Category View (Native & Lightweight Header) */
             <div>
-              <div className="category-banner" style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 28 }}>{currentCategory.icon}</div>
+              <div className="category-header-native" style={{ marginBottom: 16 }}>
+                <span className="category-icon-native">{currentCategory.icon}</span>
                 <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>{currentCategory.title}</div>
-                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>{currentCategory.subtitle}</div>
+                  <h1 className="category-title-native">{currentCategory.title}</h1>
+                  <p className="category-subtitle-native">{currentCategory.subtitle}</p>
                 </div>
               </div>
 
@@ -686,6 +706,8 @@ function MainApp() {
             <InstalledTab
               packages={aurInstalled}
               onSelect={setSelectedPkg}
+              onLaunch={handleLaunchApp}
+              addToast={addToast}
             />
           ) : view === 'updates' ? (
             /* Updates Tab */

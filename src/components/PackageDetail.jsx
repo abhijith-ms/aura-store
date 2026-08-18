@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { getPkgbuild, formatNumber, timeAgo, getAppDisplayName } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
 import AppIcon from './AppIcon';
@@ -6,9 +6,12 @@ import AppIcon from './AppIcon';
 export default function PackageDetail({
   pkg,
   installed,
+  isInstalling = false,
+  installLogs = [],
   onBack,
   onInstallStart,
   onSelectDependency,
+  onToggleTerminal,
   addToast,
 }) {
   const [showPkgbuild, setShowPkgbuild] = useState(false);
@@ -20,6 +23,24 @@ export default function PackageDetail({
   const isInstalled = installed.has(pkg.Name);
   const displayName = getAppDisplayName(pkg.Name);
   const brandColor = getPackageBrandColor(pkg.Name);
+
+  // Parse active install stage
+  const installStage = useMemo(() => {
+    if (!isInstalling || !installLogs || installLogs.length === 0) return 0;
+    let stage = 1; // 1: Resolving, 2: Fetching, 3: Building, 4: Installing, 5: Done
+    const recent = installLogs.slice(-20);
+    for (const log of recent) {
+      const text = log.text || '';
+      if (text.includes('Downloading') || text.includes('Retrieving sources') || text.includes('curl')) {
+        stage = Math.max(stage, 2);
+      } else if (text.includes('Making package') || text.includes('Compiling') || text.includes('gcc') || text.includes('cargo') || text.includes('ninja') || text.includes('Starting build')) {
+        stage = Math.max(stage, 3);
+      } else if (text.includes('Installing') || text.includes('pacman -U') || text.includes('authenticat')) {
+        stage = Math.max(stage, 4);
+      }
+    }
+    return stage;
+  }, [isInstalling, installLogs]);
 
   const togglePkgbuild = async () => {
     if (!showPkgbuild && !pkgbuild) {
@@ -51,17 +72,16 @@ export default function PackageDetail({
 
   const deps = pkg.Depends || [];
   const optDeps = pkg.OptDepends || [];
-  const conflicts = pkg.Conflicts || [];
 
   return (
     <div className="detail-page" style={{ '--package-accent': brandColor || 'var(--accent)' }}>
-      {/* Back Button */}
+      {/* Back Navigation */}
       <button className="detail-back-btn" onClick={onBack} title="Back (Esc)">
         <span>←</span>
         <span>Back</span>
       </button>
 
-      {/* Hero Card with Ambient Glow */}
+      {/* Hero Header */}
       <div className="detail-hero">
         <div className="detail-ambient-glow" />
 
@@ -96,8 +116,17 @@ export default function PackageDetail({
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            {isInstalled ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {isInstalling ? (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span className="chip chip-indigo" style={{ padding: '6px 12px', fontSize: 12.5, gap: 6 }}>
+                  <div className="spinner-apple" /> Building & Installing…
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={onToggleTerminal}>
+                  Show Terminal Logs
+                </button>
+              </div>
+            ) : isInstalled ? (
               <>
                 <button className="btn btn-installed btn-lg" disabled>✓ Installed</button>
                 <button className="btn btn-danger btn-lg" onClick={handleRemove}>
@@ -111,9 +140,31 @@ export default function PackageDetail({
             )}
           </div>
         </div>
+
+        {/* Live Build Stepper */}
+        {isInstalling && (
+          <div className="build-tracker">
+            <div className={`build-step ${installStage >= 1 ? (installStage === 1 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{installStage > 1 ? '✓' : '●'}</span>
+              <span>Resolving package dependencies</span>
+            </div>
+            <div className={`build-step ${installStage >= 2 ? (installStage === 2 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{installStage > 2 ? '✓' : installStage === 2 ? '●' : '○'}</span>
+              <span>Retrieving source archives & signatures</span>
+            </div>
+            <div className={`build-step ${installStage >= 3 ? (installStage === 3 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{installStage > 3 ? '✓' : installStage === 3 ? '●' : '○'}</span>
+              <span>Compiling & building via makepkg</span>
+            </div>
+            <div className={`build-step ${installStage >= 4 ? (installStage === 4 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{installStage > 4 ? '✓' : installStage === 4 ? '●' : '○'}</span>
+              <span>Finalizing installation via pacman</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Confirmation Review Banner */}
+      {/* Confirmation Review Dialog */}
       {confirmingInstall && (
         <div className="detail-section" style={{ borderColor: 'var(--accent)', animation: 'fadeIn 0.15s ease' }}>
           <div className="detail-section-title">

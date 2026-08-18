@@ -79,6 +79,20 @@ export const getInstalled = async () => {
   return res.json();
 };
 
+export const launchApp = async (pkg) => {
+  try {
+    const res = await fetch(`${API}/api/launch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pkg }),
+    });
+    return res.json();
+  } catch {
+    return { ok: false };
+  }
+};
+
+
 export const getUpdates = async () => {
   const res = await fetch(`${API}/api/updates`);
   return res.json();
