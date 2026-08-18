@@ -1,0 +1,143 @@
+import { useMemo } from 'react';
+import { getPackageIcon } from '../services/aurApi';
+
+export default function TopProgressBar({
+  active,
+  pkgName,
+  batchIndex = 0,
+  batchTotal = 0,
+  action = 'install',
+  logs = [],
+  onToggleTerminal,
+  terminalOpen,
+}) {
+  // Parse recent log lines to extract real speed, percent, and phase
+  const parsedStatus = useMemo(() => {
+    if (!active || !logs || logs.length === 0) {
+      return { phase: 'Starting…', speed: '', percent: 0, downloaded: '' };
+    }
+
+    let phase = 'Processing…';
+    let speed = '';
+    let percent = 0;
+    let downloaded = '';
+
+    // Search the last 20 logs
+    const recent = logs.slice(-20);
+    for (let i = recent.length - 1; i >= 0; i--) {
+      const line = recent[i].text || '';
+
+      // Check phase
+      if (line.includes('Downloading') || line.includes('Retrieving sources') || line.includes('curl') || line.includes('% Total')) {
+        phase = 'Downloading sources';
+      } else if (line.includes('Making package') || line.includes('Entering fakeroot') || line.includes('Starting build') || line.includes('Compiling') || line.includes('gcc') || line.includes('clang') || line.includes('cargo') || line.includes('ninja')) {
+        phase = 'Compiling & Building';
+      } else if (line.includes('Compressing package') || line.includes('Tidying install') || line.includes('Generating .PKGINFO')) {
+        phase = 'Creating package';
+      } else if (line.includes('Installing') || line.includes('pacman -U') || line.includes('Starting package()') || line.includes('authenticat')) {
+        phase = 'Finalizing install';
+      } else if (line.includes('Starting remove') || line.includes('Removing')) {
+        phase = 'Removing package';
+      }
+
+      // Check curl progress format: "28 229.6M 28 65.06M ... 16.27M" or "89% 5.6 MB/s"
+      const percentMatch = line.match(/(\d{1,3})%/);
+      if (percentMatch && !percent) {
+        const val = parseInt(percentMatch[1], 10);
+        if (val >= 0 && val <= 100) percent = val;
+      }
+
+      // Speed match: e.g. "15.8 MB/s", "4.2 MiB/s", "850 kB/s", "12.4M"
+      const speedMatch = line.match(/([\d.]+\s*(?:MB\/s|MiB\/s|kB\/s|KB\/s|GB\/s|M(?:\s|$)))/i);
+      if (speedMatch && !speed) {
+        const s = speedMatch[1].trim();
+        speed = s.endsWith('/s') ? s : `${s}B/s`;
+      }
+
+      // Size match: "65.06M / 229.6M"
+      const sizeMatch = line.match(/([\d.]+[MGK]i?B?)\s+(?:of|\/)\s+([\d.]+[MGK]i?B?)/i);
+      if (sizeMatch && !downloaded) {
+        downloaded = `${sizeMatch[1]} / ${sizeMatch[2]}`;
+      }
+    }
+
+    // If compiling, give a nice indeterminate progress estimation
+    if (phase === 'Compiling & Building' && percent === 0) {
+      percent = 65;
+    } else if (phase === 'Creating package' && percent === 0) {
+      percent = 85;
+    } else if (phase === 'Finalizing install' && percent === 0) {
+      percent = 92;
+    }
+
+    return { phase, speed, percent, downloaded };
+  }, [active, logs]);
+
+  if (!active) return null;
+
+  const icon = getPackageIcon(pkgName || '');
+  const isBatch = batchTotal > 1;
+
+  return (
+    <div className="top-progress-bar">
+      <div className="top-progress-content">
+        {/* Left: Icon & Package Info */}
+        <div className="top-progress-left">
+          <div className="top-progress-spinner">
+            <div className="spinner-apple" />
+          </div>
+          <div className="top-progress-icon">{icon}</div>
+          <div className="top-progress-meta">
+            <div className="top-progress-title">
+              {action === 'remove' ? 'Removing' : 'Updating'}: <span className="top-progress-name">{pkgName}</span>
+              {isBatch && (
+                <span className="top-progress-batch-tag">
+                  ({batchIndex + 1} of {batchTotal})
+                </span>
+              )}
+            </div>
+            <div className="top-progress-phase">
+              <span className="top-progress-pulse-dot" />
+              {parsedStatus.phase}
+              {parsedStatus.downloaded && ` (${parsedStatus.downloaded})`}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Network Speed, Percent & Terminal Toggle */}
+        <div className="top-progress-right">
+          {parsedStatus.speed && (
+            <div className="top-progress-speed" title="Download Rate">
+              <span className="top-progress-speed-icon">↓</span>
+              <span>{parsedStatus.speed}</span>
+            </div>
+          )}
+
+          {parsedStatus.percent > 0 && (
+            <div className="top-progress-percent">
+              {parsedStatus.percent}%
+            </div>
+          )}
+
+          <button
+            className={`btn-terminal-toggle ${terminalOpen ? 'active' : ''}`}
+            onClick={onToggleTerminal}
+            title="Toggle build terminal output"
+          >
+            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>$_</span>
+            <span>Logs</span>
+            <span style={{ fontSize: 9 }}>{terminalOpen ? '▲' : '▼'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Animated Glowing Progress Line */}
+      <div className="top-progress-track">
+        <div
+          className={`top-progress-indicator ${parsedStatus.percent === 0 ? 'indeterminate' : ''}`}
+          style={{ width: parsedStatus.percent > 0 ? `${Math.max(parsedStatus.percent, 8)}%` : '35%' }}
+        />
+      </div>
+    </div>
+  );
+}

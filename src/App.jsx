@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import AppCard from './components/AppCard';
 import PackageDetail from './components/PackageDetail';
 import TerminalDrawer from './components/TerminalDrawer';
+import TopProgressBar from './components/TopProgressBar';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
   streamInstall, FEATURED, TRENDING_NAMES, CATEGORIES, getPackageIcon, formatNumber, timeAgo
@@ -23,7 +24,7 @@ function ToastStack({ toasts }) {
 }
 
 // ---------- Installed View ----------
-function InstalledTab({ packages, installed, onSelect }) {
+function InstalledTab({ packages, onSelect }) {
   if (packages.length === 0) return (
     <div className="empty-state">
       <div className="empty-icon">📦</div>
@@ -62,20 +63,16 @@ function InstalledTab({ packages, installed, onSelect }) {
   );
 }
 
-// ---------- Updates View ----------
-function UpdatesTab({ updates, onInstallStart, onInstallDone, addToast, openTerminal }) {
-  const [installing, setInstalling] = useState(new Set());
-  const handleUpdate = (pkg) => {
-    setInstalling(prev => new Set([...prev, pkg]));
-    openTerminal();
-    onInstallStart(pkg, 'install');
-    streamInstall(pkg, 'install', (log, type) => onInstallStart(pkg, 'install', log, type), (ok) => {
-      setInstalling(prev => { const s = new Set(prev); s.delete(pkg); return s; });
-      onInstallDone(pkg, 'install', ok);
-      addToast(ok ? `${pkg} updated successfully!` : `Failed to update ${pkg}`, ok ? 'success' : 'error');
-    });
-  };
-
+// ---------- Updates View (with Update All) ----------
+function UpdatesTab({
+  updates,
+  onUpdateSingle,
+  onUpdateAll,
+  batchActive,
+  batchIndex,
+  batchList,
+  pkgStatusMap,
+}) {
   if (updates.length === 0) return (
     <div className="empty-state">
       <div className="empty-icon">✨</div>
@@ -86,33 +83,75 @@ function UpdatesTab({ updates, onInstallStart, onInstallDone, addToast, openTerm
 
   return (
     <div>
-      <div className="section-header">
-        <div className="section-title">Available Updates</div>
-        <div className="section-count">{updates.length} updates available</div>
+      <div className="section-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div className="section-title">Available Updates</div>
+          <div className="section-count">{updates.length} updates available</div>
+        </div>
+
+        {/* Update All Button */}
+        <button
+          className="btn btn-primary btn-lg"
+          onClick={onUpdateAll}
+          disabled={batchActive}
+          style={{ gap: 8, padding: '9px 20px', fontSize: 13 }}
+        >
+          {batchActive ? (
+            <>
+              <div className="spinner-apple" />
+              <span>Updating All ({batchIndex + 1}/{batchList.length})…</span>
+            </>
+          ) : (
+            <>
+              <span>⚡ Update All</span>
+              <span style={{ background: 'rgba(255,255,255,0.22)', padding: '1px 7px', borderRadius: 99, fontSize: 11 }}>
+                {updates.length}
+              </span>
+            </>
+          )}
+        </button>
       </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {updates.map(u => (
-          <div key={u.name} style={{
-            display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
-            background: 'var(--fill-quaternary)', border: '1px solid var(--separator)',
-            borderRadius: 'var(--radius-lg)'
-          }}>
-            <div style={{ fontSize: 22 }}>{getPackageIcon(u.name)}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{u.name}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                {u.current} → <span style={{ color: 'var(--apple-green)' }}>{u.latest}</span>
+        {updates.map(u => {
+          const status = pkgStatusMap[u.name] || 'idle';
+          return (
+            <div key={u.name} style={{
+              display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
+              background: 'var(--fill-quaternary)', border: '1px solid var(--separator)',
+              borderRadius: 'var(--radius-lg)'
+            }}>
+              <div style={{ fontSize: 22 }}>{getPackageIcon(u.name)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{u.name}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                  {u.current} → <span style={{ color: 'var(--apple-green)' }}>{u.latest}</span>
+                </div>
               </div>
+
+              {/* Status Indicator / Action */}
+              {status === 'updating' ? (
+                <span className="chip chip-indigo" style={{ padding: '6px 12px', gap: 6 }}>
+                  <div className="spinner-apple" /> Updating…
+                </span>
+              ) : status === 'done' ? (
+                <span className="chip chip-green" style={{ padding: '6px 12px' }}>✓ Updated</span>
+              ) : status === 'failed' ? (
+                <span className="chip chip-red" style={{ padding: '6px 12px' }}>✕ Failed</span>
+              ) : status === 'waiting' ? (
+                <span className="chip chip-gray" style={{ padding: '6px 12px' }}>⏳ Waiting</span>
+              ) : (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => onUpdateSingle(u.name)}
+                  disabled={batchActive}
+                >
+                  ↑ Update
+                </button>
+              )}
             </div>
-            <button
-              className={installing.has(u.name) ? 'btn btn-ghost btn-sm' : 'btn btn-primary btn-sm'}
-              onClick={() => handleUpdate(u.name)}
-              disabled={installing.has(u.name)}
-            >
-              {installing.has(u.name) ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Updating…</> : '↑ Update'}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -148,7 +187,7 @@ function HeroCard({ pkg, installed, onSelect, onInstall }) {
   );
 }
 
-// ---------- Main App ----------
+// ---------- Main App Component ----------
 export default function App() {
   const [view, setView] = useState('explore');
   const [query, setQuery] = useState('');
@@ -163,30 +202,40 @@ export default function App() {
   const [trending, setTrending] = useState([]);
   const [categoryPkgs, setCategoryPkgs] = useState([]);
   const [toasts, setToasts] = useState([]);
-  const [termOpen, setTermOpen] = useState(false);
+
+  // Active install / update state
+  const [activePkg, setActivePkg] = useState('');
+  const [activeAction, setActiveAction] = useState('install');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [termLogs, setTermLogs] = useState([]);
-  const [termInstalling, setTermInstalling] = useState(false);
-  const [termPkg, setTermPkg] = useState('');
+  const [termOpen, setTermOpen] = useState(false);
+
+  // Batch Update Queue State
+  const [batchActive, setBatchActive] = useState(false);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [batchList, setBatchList] = useState([]);
+  const [pkgStatusMap, setPkgStatusMap] = useState({});
+
   const searchInputRef = useRef(null);
   const searchTimer = useRef(null);
 
-  // Load installed, updates & trending on mount
-  useEffect(() => {
+  // Refresh package metadata
+  const refreshPackages = useCallback(() => {
     getInstalled().then(({ aur, allInstalled }) => {
       setInstalled(new Set(allInstalled));
       setAurInstalled(aur || []);
     }).catch(() => {});
+    getUpdates().then(({ updates: u }) => setUpdates(u || [])).catch(() => {});
+  }, []);
 
-    getUpdates().then(({ updates }) => setUpdates(updates || [])).catch(() => {});
-
-    // Load featured
+  // Load on mount
+  useEffect(() => {
+    refreshPackages();
     Promise.all(FEATURED.map(f =>
       getPackageInfo(f.name).then(data => ({ ...f, data })).catch(() => ({ ...f, data: null }))
     )).then(setFeatured);
-
-    // Load trending
     getMultiplePackageInfo(TRENDING_NAMES).then(setTrending);
-  }, []);
+  }, [refreshPackages]);
 
   // Keyboard shortcut: Cmd+K / Ctrl+K & Escape
   useEffect(() => {
@@ -207,7 +256,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedPkg, query]);
 
-  // Load category packages when switching to a category view
+  // Category packages load
   useEffect(() => {
     const activeCategory = CATEGORIES.find(c => c.id === view);
     if (activeCategory) {
@@ -238,42 +287,79 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   }, []);
 
-  const handleInstallStart = useCallback((pkg, action, log, type) => {
-    setTermPkg(pkg);
-    setTermInstalling(true);
-    setTermOpen(true);
-    if (log !== undefined) {
-      setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]);
-    }
-  }, []);
-
-  const handleInstallDone = useCallback((pkg, action, ok) => {
-    setTermInstalling(false);
-    if (ok) {
-      setTermLogs(prev => [...prev, { text: `✓ ${action === 'remove' ? 'Removed' : 'Installed'} ${pkg} successfully!`, type: 'done' }]);
-      getInstalled().then(({ aur, allInstalled }) => {
-        setInstalled(new Set(allInstalled));
-        setAurInstalled(aur || []);
-      }).catch(() => {});
-    } else {
-      setTermLogs(prev => [...prev, { text: `✕ ${action} failed for ${pkg}`, type: 'error' }]);
-    }
-  }, []);
-
-  const handleQuickInstall = useCallback((pkg) => {
+  // Run single install / remove
+  const runPackageAction = useCallback((pkgName, action, onFinish) => {
+    setActivePkg(pkgName);
+    setActiveAction(action);
+    setIsProcessing(true);
     setTermLogs([]);
-    setTermPkg(pkg.Name);
-    setTermOpen(true);
-    setTermInstalling(true);
-    handleInstallStart(pkg.Name, 'install');
-    streamInstall(pkg.Name, 'install',
+
+    streamInstall(
+      pkgName,
+      action,
       (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
       (ok) => {
-        handleInstallDone(pkg.Name, 'install', ok);
-        addToast(ok ? `${pkg.Name} installed!` : `Failed to install ${pkg.Name}`, ok ? 'success' : 'error');
+        setIsProcessing(false);
+        if (ok) {
+          setTermLogs(prev => [...prev, { text: `✓ Completed ${pkgName}`, type: 'done' }]);
+          refreshPackages();
+          addToast(`${pkgName} ${action === 'remove' ? 'removed' : 'installed'} successfully!`, 'success');
+        } else {
+          setTermLogs(prev => [...prev, { text: `✕ Failed for ${pkgName}`, type: 'error' }]);
+          addToast(`Action failed for ${pkgName}`, 'error');
+        }
+        if (onFinish) onFinish(ok);
       }
     );
-  }, [handleInstallStart, handleInstallDone, addToast]);
+  }, [addToast, refreshPackages]);
+
+  // Execute Batch Update Queue sequentially
+  useEffect(() => {
+    if (!batchActive || batchList.length === 0) return;
+
+    if (batchIndex >= batchList.length) {
+      // Completed full batch
+      setBatchActive(false);
+      setIsProcessing(false);
+      setActivePkg('');
+      addToast('All updates completed!', 'success');
+      refreshPackages();
+      return;
+    }
+
+    const currentPkg = batchList[batchIndex];
+    setPkgStatusMap(prev => ({ ...prev, [currentPkg]: 'updating' }));
+
+    runPackageAction(currentPkg, 'install', (ok) => {
+      setPkgStatusMap(prev => ({ ...prev, [currentPkg]: ok ? 'done' : 'failed' }));
+      setBatchIndex(i => i + 1);
+    });
+  }, [batchActive, batchIndex, batchList, runPackageAction, addToast, refreshPackages]);
+
+  // Trigger Update All
+  const handleUpdateAll = () => {
+    if (updates.length === 0 || batchActive) return;
+    const names = updates.map(u => u.name);
+    const initialMap = {};
+    names.forEach(n => { initialMap[n] = 'waiting'; });
+    setPkgStatusMap(initialMap);
+    setBatchList(names);
+    setBatchIndex(0);
+    setBatchActive(true);
+    addToast(`Starting batch update for ${names.length} packages…`, 'info');
+  };
+
+  // Trigger single update from Updates tab
+  const handleUpdateSingle = (pkgName) => {
+    setPkgStatusMap(prev => ({ ...prev, [pkgName]: 'updating' }));
+    runPackageAction(pkgName, 'install', (ok) => {
+      setPkgStatusMap(prev => ({ ...prev, [pkgName]: ok ? 'done' : 'failed' }));
+    });
+  };
+
+  const handleQuickInstall = (pkg) => {
+    runPackageAction(pkg.Name, 'install');
+  };
 
   const handleDependencyClick = async (depName) => {
     setLoading(true);
@@ -326,13 +412,21 @@ export default function App() {
               <option value="votes">Sort: Votes</option>
               <option value="lastmodified">Sort: Updated</option>
             </select>
-            <button className="header-btn" title="Refresh data" onClick={() => {
-              getInstalled().then(({ aur, allInstalled }) => { setInstalled(new Set(allInstalled)); setAurInstalled(aur || []); });
-              getUpdates().then(({ updates }) => setUpdates(updates || []));
-              addToast('Refreshed package lists', 'info');
-            }}>↺</button>
+            <button className="header-btn" title="Refresh data" onClick={() => { refreshPackages(); addToast('Refreshed package lists', 'info'); }}>↺</button>
           </div>
         </div>
+
+        {/* Top Progress Bar (macOS / Steam style) */}
+        <TopProgressBar
+          active={isProcessing}
+          pkgName={activePkg}
+          batchIndex={batchIndex}
+          batchTotal={batchActive ? batchList.length : 0}
+          action={activeAction}
+          logs={termLogs}
+          onToggleTerminal={() => setTermOpen(o => !o)}
+          terminalOpen={termOpen}
+        />
 
         {/* Content */}
         <div className="content" style={{ paddingBottom: termOpen ? 268 : 24 }}>
@@ -493,7 +587,6 @@ export default function App() {
           {!isSearching && view === 'installed' && (
             <InstalledTab
               packages={aurInstalled}
-              installed={installed}
               onSelect={setSelectedPkg}
             />
           )}
@@ -502,10 +595,12 @@ export default function App() {
           {!isSearching && view === 'updates' && (
             <UpdatesTab
               updates={updates}
-              onInstallStart={handleInstallStart}
-              onInstallDone={handleInstallDone}
-              addToast={addToast}
-              openTerminal={() => setTermOpen(true)}
+              onUpdateSingle={handleUpdateSingle}
+              onUpdateAll={handleUpdateAll}
+              batchActive={batchActive}
+              batchIndex={batchIndex}
+              batchList={batchList}
+              pkgStatusMap={pkgStatusMap}
             />
           )}
 
@@ -518,29 +613,20 @@ export default function App() {
           pkg={selectedPkg}
           installed={installed}
           onClose={() => setSelectedPkg(null)}
-          onInstallStart={(pkg, action) => {
-            setTermLogs([]);
-            setTermPkg(pkg);
-            setTermOpen(true);
-            setTermInstalling(true);
-            streamInstall(pkg, action,
-              (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
-              (ok) => handleInstallDone(pkg, action, ok)
-            );
-          }}
-          onInstallDone={handleInstallDone}
+          onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
+          onInstallDone={() => {}}
           onSelectDependency={handleDependencyClick}
           addToast={addToast}
         />
       )}
 
-      {/* Terminal Drawer */}
+      {/* Terminal Drawer (Collapsible) */}
       <TerminalDrawer
         open={termOpen}
         onToggle={() => setTermOpen(o => !o)}
         logs={termLogs}
-        installing={termInstalling}
-        packageName={termPkg}
+        installing={isProcessing}
+        packageName={activePkg}
       />
 
       {/* Toast Notifications */}

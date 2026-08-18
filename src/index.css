@@ -912,3 +912,191 @@ html, body, #root {
 .empty-icon  { font-size: 46px; opacity: 0.35; }
 .empty-title { font-size: 15px; font-weight: 600; color: var(--label-secondary); }
 .empty-desc  { font-size: 13px; max-width: 280px; line-height: 1.55; }
+
+/* ── Top Progress Bar (macOS / Steam style) ── */
+.top-progress-bar {
+  background: rgba(22, 22, 28, 0.94);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid var(--separator);
+  z-index: 15;
+  position: relative;
+  animation: slideDown 0.22s var(--spring);
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.top-progress-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 22px;
+  gap: 16px;
+}
+
+.top-progress-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.top-progress-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.top-progress-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.top-progress-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.top-progress-name {
+  color: var(--apple-blue);
+  font-family: var(--font-mono);
+}
+
+.top-progress-batch-tag {
+  font-size: 11px;
+  color: var(--apple-indigo);
+  background: rgba(94, 92, 230, 0.16);
+  border: 1px solid rgba(94, 92, 230, 0.3);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+}
+
+.top-progress-phase {
+  font-size: 11.5px;
+  color: var(--label-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.top-progress-pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--apple-green);
+  border-radius: 50%;
+  animation: pulseDot 1.4s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.6); opacity: 0.4; }
+}
+
+.top-progress-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.top-progress-speed {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--apple-teal);
+  background: rgba(64, 203, 224, 0.12);
+  border: 1px solid rgba(64, 203, 224, 0.25);
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+}
+
+.top-progress-speed-icon {
+  font-size: 12px;
+  animation: bounceDown 1.2s infinite;
+}
+
+@keyframes bounceDown {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2px); }
+}
+
+.top-progress-percent {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--label-primary);
+}
+
+.btn-terminal-toggle {
+  background: var(--fill-tertiary);
+  border: 1px solid var(--separator);
+  color: var(--label-secondary);
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.18s var(--ease-apple);
+  outline: none;
+}
+
+.btn-terminal-toggle:hover {
+  background: var(--fill-secondary);
+  color: var(--label-primary);
+}
+
+.btn-terminal-toggle.active {
+  background: rgba(94, 92, 230, 0.25);
+  color: var(--apple-indigo);
+  border-color: rgba(94, 92, 230, 0.4);
+}
+
+.top-progress-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.top-progress-indicator {
+  height: 100%;
+  background: linear-gradient(90deg, #0A84FF 0%, #5E5CE6 50%, #30D158 100%);
+  transition: width 0.35s ease;
+  box-shadow: 0 0 10px rgba(10, 132, 255, 0.6);
+}
+
+.top-progress-indicator.indeterminate {
+  width: 35% !important;
+  animation: shimmerProgress 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes shimmerProgress {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(200%); }
+}
+
+.spinner-apple {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--fill-primary);
+  border-top-color: var(--apple-blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
