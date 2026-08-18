@@ -3,6 +3,12 @@ import cors from 'cors';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const askpassPath = path.join(__dirname, 'askpass.sh');
 
 const execAsync = promisify(exec);
 const app = express();
@@ -92,11 +98,15 @@ app.get('/api/install', (req, res) => {
     args = ['pacman', '-R', '--noconfirm', pkg];
   } else {
     cmd = 'paru';
-    args = ['-S', '--noconfirm', '--noprogressbar', '--color', 'never', pkg];
+    args = ['-S', '--noconfirm', '--noprogressbar', '--color', 'never', '--sudoflags', '-A', pkg];
   }
 
   const child = spawn(cmd, args, {
-    env: { ...process.env, HOME: os.homedir() },
+    env: {
+      ...process.env,
+      HOME: os.homedir(),
+      SUDO_ASKPASS: askpassPath,
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
