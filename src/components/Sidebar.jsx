@@ -1,13 +1,27 @@
 import { CATEGORIES } from '../services/aurApi';
+import { useTheme } from '../context/ThemeContext';
 
 const NAV = [
   { id: 'explore', icon: '✦', label: 'Explore' },
-  { id: 'trending', icon: '🔥', label: 'Top Charts' },
   { id: 'installed', icon: '✓', label: 'Installed' },
   { id: 'updates', icon: '↑', label: 'Updates' },
 ];
 
 export default function Sidebar({ active, onNav, installedCount, updateCount }) {
+  const { themeSetting, cycleTheme } = useTheme();
+
+  const themeLabels = {
+    system: 'System Theme',
+    dark: 'Dark Mode',
+    light: 'Light Mode',
+  };
+
+  const themeIcons = {
+    system: '💻',
+    dark: '🌙',
+    light: '☀️',
+  };
+
   return (
     <nav className="sidebar">
       <div className="sidebar-logo">
@@ -23,7 +37,7 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
           onClick={() => onNav(item.id)}
         >
           <span className="nav-icon">{item.icon}</span>
-          {item.label}
+          <span>{item.label}</span>
           {item.id === 'installed' && installedCount > 0 && (
             <span className="badge green">{installedCount}</span>
           )}
@@ -33,7 +47,7 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
         </div>
       ))}
 
-      <div className="nav-section-label" style={{ marginTop: 10 }}>Categories</div>
+      <div className="nav-section-label" style={{ marginTop: 14 }}>Categories</div>
       {CATEGORIES.map(cat => (
         <div
           key={cat.id}
@@ -41,18 +55,28 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
           onClick={() => onNav(cat.id)}
         >
           <span className="nav-icon">{cat.icon}</span>
-          {cat.label}
+          <span>{cat.label}</span>
         </div>
       ))}
 
       <div className="sidebar-bottom">
-        <div style={{ padding: '4px 10px', fontSize: 11, color: 'var(--label-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <button
+          className="theme-toggle-btn"
+          onClick={cycleTheme}
+          title="Toggle theme (System / Dark / Light)"
+        >
+          <span>{themeIcons[themeSetting]} {themeLabels[themeSetting]}</span>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>⇄</span>
+        </button>
+
+        <div style={{ padding: '4px 8px', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
           <span>Search</span>
-          <kbd style={{ background: 'var(--fill-quaternary)', border: '1px solid var(--separator)', borderRadius: 4, padding: '2px 5px', fontSize: 10, fontFamily: 'monospace' }}>⌘K</kbd>
+          <kbd style={{ background: 'var(--surface-active)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', fontSize: 10, fontFamily: 'var(--font-mono)' }}>Ctrl K</kbd>
         </div>
-        <div className="nav-item" style={{ opacity: 0.7, cursor: 'default', marginTop: 4, padding: '6px 10px', fontSize: 12 }}>
+
+        <div className="nav-item" style={{ opacity: 0.7, cursor: 'default', padding: '4px 8px', fontSize: 11.5 }}>
           <span className="nav-icon" style={{ fontSize: 12 }}>⚡</span>
-          <span style={{ fontSize: 11, color: 'var(--label-secondary)' }}>Backend: paru / AUR v5</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>paru / AUR v5</span>
         </div>
       </div>
     </nav>

@@ -1,8 +1,10 @@
-import { formatNumber } from '../services/aurApi';
+import { formatNumber, getAppDisplayName } from '../services/aurApi';
 import AppIcon from './AppIcon';
 
 export default function AppCard({ pkg, installed, onSelect, onQuickInstall, index = 0, rank = null }) {
   const isInstalled = installed.has(pkg.Name);
+  const displayName = getAppDisplayName(pkg.Name);
+  const isCustomName = displayName !== pkg.Name;
 
   const handleInstallClick = (e) => {
     e.stopPropagation();
@@ -12,7 +14,7 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall, inde
   return (
     <div
       className="app-card"
-      style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+      style={{ animationDelay: `${Math.min(index * 25, 200)}ms` }}
       onClick={() => onSelect(pkg)}
     >
       <div className="card-top">
@@ -23,31 +25,33 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall, inde
         )}
         <AppIcon pkgName={pkg.Name} size="md" installed={isInstalled} />
         <div className="card-title-block">
-          <div className="card-name">{pkg.Name}</div>
-          <div className="card-version">v{pkg.Version}</div>
+          <div className="card-name">{displayName}</div>
+          <div className="card-version">
+            {isCustomName ? pkg.Name : `v${pkg.Version}`}
+          </div>
         </div>
         {pkg.OutOfDate && (
-          <span className="chip chip-orange" style={{ fontSize: 10 }}>⚠</span>
+          <span className="chip chip-orange" style={{ fontSize: 10 }} title="Flagged out of date in AUR">⚠</span>
         )}
       </div>
 
-      <div className="card-desc">{pkg.Description || 'No description available.'}</div>
+      <div className="card-desc">{pkg.Description || 'No description available in AUR.'}</div>
 
       <div className="card-footer">
         <div className="card-stats">
-          <div className="stat">
-            <span className="stat-icon">⭐</span>
+          <div className="stat" title="AUR Votes">
+            <span>★</span>
             <span>{formatNumber(pkg.NumVotes)}</span>
           </div>
-          <div className="stat">
-            <span className="stat-icon">📈</span>
-            <span>{pkg.Popularity?.toFixed(1)}</span>
+          <div className="stat" title="Popularity Score">
+            <span>📈</span>
+            <span>{pkg.Popularity ? pkg.Popularity.toFixed(1) : '0'}</span>
           </div>
         </div>
         {isInstalled ? (
           <button className="btn btn-installed btn-sm" onClick={handleInstallClick}>✓ Installed</button>
         ) : (
-          <button className="btn btn-primary btn-sm" onClick={handleInstallClick}>Get</button>
+          <button className="btn btn-primary btn-sm" onClick={handleInstallClick}>Install</button>
         )}
       </div>
     </div>

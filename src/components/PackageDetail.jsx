@@ -1,15 +1,25 @@
 import { useState } from 'react';
-import { getPkgbuild, streamInstall, formatNumber, timeAgo } from '../services/aurApi';
+import { getPkgbuild, formatNumber, timeAgo, getAppDisplayName } from '../services/aurApi';
+import { getPackageBrandColor } from '../services/iconRegistry';
 import AppIcon from './AppIcon';
 
-export default function PackageDetail({ pkg, installed, onClose, onInstallStart, onInstallDone, onSelectDependency, addToast }) {
+export default function PackageDetail({
+  pkg,
+  installed,
+  onClose,
+  onInstallStart,
+  onSelectDependency,
+  addToast,
+}) {
   const [tab, setTab] = useState('info');
   const [pkgbuild, setPkgbuild] = useState('');
   const [pkgbuildLoading, setPkgbuildLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [installing, setInstalling] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [confirmingInstall, setConfirmingInstall] = useState(false);
+
   const isInstalled = installed.has(pkg.Name);
+  const displayName = getAppDisplayName(pkg.Name);
+  const brandColor = getPackageBrandColor(pkg.Name);
 
   const fetchPkgbuild = async () => {
     if (pkgbuild) return;
@@ -29,208 +39,243 @@ export default function PackageDetail({ pkg, installed, onClose, onInstallStart,
     navigator.clipboard.writeText(pkgbuild);
     setCopied(true);
     addToast('PKGBUILD copied to clipboard', 'info');
-    setTimeout(() => setCopied(false), 2500);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleInstall = () => {
-    setInstalling(true);
+  const handleConfirmedInstall = () => {
+    setConfirmingInstall(false);
     onInstallStart(pkg.Name, 'install');
-    streamInstall(pkg.Name, 'install', onInstallStart, (ok) => {
-      setInstalling(false);
-      onInstallDone(pkg.Name, 'install', ok);
-      addToast(ok ? `${pkg.Name} installed successfully!` : `Failed to install ${pkg.Name}`, ok ? 'success' : 'error');
-    });
+    onClose();
   };
 
   const handleRemove = () => {
-    setRemoving(true);
     onInstallStart(pkg.Name, 'remove');
-    streamInstall(pkg.Name, 'remove', onInstallStart, (ok) => {
-      setRemoving(false);
-      onInstallDone(pkg.Name, 'remove', ok);
-      addToast(ok ? `${pkg.Name} removed.` : `Failed to remove ${pkg.Name}`, ok ? 'info' : 'error');
-    });
+    onClose();
   };
 
-  const icon = getPackageIcon(pkg.Name);
   const deps = pkg.Depends || [];
   const optDeps = pkg.OptDepends || [];
   const conflicts = pkg.Conflicts || [];
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div
+        className="modal"
+        style={{ '--package-accent': brandColor || 'var(--accent)' }}
+      >
+        {/* Subtle Ambient Glow */}
+        <div className="modal-ambient-glow" />
+
         {/* Header */}
         <div className="modal-header">
           <AppIcon pkgName={pkg.Name} size="lg" installed={isInstalled} />
           <div className="modal-meta">
-            <div className="modal-name">{pkg.Name}</div>
-            <div className="modal-subtitle">
-              v{pkg.Version} · by {pkg.Maintainer || 'Community'}
-            </div>
+            <div className="modal-name">{displayName}</div>
+            <div className="modal-pkgname">AUR: {pkg.Name} · v{pkg.Version}</div>
             <div className="modal-chips">
               {isInstalled && <span className="chip chip-green">✓ Installed</span>}
               {pkg.OutOfDate && <span className="chip chip-orange">⚠ Out of Date</span>}
-              {pkg.Popularity > 5 && <span className="chip chip-indigo">🔥 Popular</span>}
+              {pkg.Popularity > 5 && <span className="chip chip-indigo">★ Popular</span>}
               {pkg.License?.map(l => <span key={l} className="chip chip-gray">{l}</span>)}
             </div>
           </div>
           <button className="modal-close" onClick={onClose} title="Close (Esc)">✕</button>
         </div>
 
-        {/* Tabs */}
-        <div className="modal-tabs">
-          {['info', 'deps', 'pkgbuild'].map(t => (
-            <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => handleTabChange(t)}>
-              {t === 'info' ? 'Overview' : t === 'deps' ? `Dependencies (${deps.length})` : 'PKGBUILD'}
-            </button>
-          ))}
-        </div>
-
-        {/* Body */}
-        <div className="modal-body">
-          {tab === 'info' && (
-            <>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-card-value" style={{ color: 'var(--apple-yellow)' }}>⭐ {formatNumber(pkg.NumVotes)}</div>
-                  <div className="stat-card-label">Votes</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-card-value" style={{ color: 'var(--apple-blue)' }}>📈 {pkg.Popularity?.toFixed(2)}</div>
-                  <div className="stat-card-label">Popularity</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-card-value" style={{ color: 'var(--apple-green)' }}>🕐 {timeAgo(pkg.LastModified)}</div>
-                  <div className="stat-card-label">Last Updated</div>
-                </div>
+        {/* Confirmation Review View */}
+        {confirmingInstall ? (
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                Review AUR Package Build
               </div>
-
-              <div style={{ fontSize: 13.5, color: 'var(--label-secondary)', lineHeight: 1.6, marginBottom: 18 }}>
-                {pkg.Description || 'No description available for this package.'}
-              </div>
-
-              {[
-                ['Package', pkg.Name],
-                ['Base Name', pkg.PackageBase],
-                ['Version', pkg.Version],
-                ['Maintainer', pkg.Maintainer || 'None'],
-                ['Submitted', timeAgo(pkg.FirstSubmitted)],
-                ['License', pkg.License?.join(', ')],
-              ].filter(([, v]) => v).map(([label, value]) => (
-                <div className="info-row" key={label}>
-                  <span className="info-label">{label}</span>
-                  <span className="info-value">{value}</span>
-                </div>
-              ))}
-              {pkg.URL && (
-                <div className="info-row">
-                  <span className="info-label">Upstream</span>
-                  <a className="info-link" href={pkg.URL} target="_blank" rel="noreferrer">{pkg.URL} ↗</a>
-                </div>
-              )}
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+                AUR packages are community-maintained recipes. Aura will build and verify this package locally on your Arch system via <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>paru</code>.
+              </p>
               <div className="info-row">
-                <span className="info-label">AUR Source</span>
-                <a className="info-link" href={`https://aur.archlinux.org/packages/${pkg.Name}`} target="_blank" rel="noreferrer">
-                  aur.archlinux.org/packages/{pkg.Name} ↗
-                </a>
+                <span className="info-label">Package</span>
+                <span className="info-value font-mono">{pkg.Name}</span>
               </div>
-            </>
-          )}
-
-          {tab === 'deps' && (
-            <>
-              {deps.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                    Required Runtime Dependencies ({deps.length})
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {deps.map(d => (
-                      <span
-                        key={d}
-                        className="chip chip-indigo"
-                        style={{ cursor: 'pointer', transition: 'transform 0.15s' }}
-                        title={`Search ${d}`}
-                        onClick={() => onSelectDependency && onSelectDependency(d.split(/[<>=]/)[0])}
-                      >
-                        {d} ↗
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {optDeps.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                    Optional Dependencies ({optDeps.length})
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {optDeps.map(d => (
-                      <span key={d} className="chip chip-gray" title={d}>
-                        {d.split(':')[0]}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {conflicts.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 12, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                    Conflicts
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {conflicts.map(d => <span key={d} className="chip chip-red">{d}</span>)}
-                  </div>
-                </div>
-              )}
-              {deps.length === 0 && optDeps.length === 0 && (
-                <div className="empty-state">
-                  <div className="empty-icon">📦</div>
-                  <div className="empty-title">No dependencies</div>
-                  <div className="empty-desc">This package has no declared dependencies in the AUR database.</div>
-                </div>
-              )}
-            </>
-          )}
-
-          {tab === 'pkgbuild' && (
-            pkgbuildLoading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
-            ) : pkgbuild ? (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={handleCopyPkgbuild}>
-                    {copied ? '✓ Copied' : '📋 Copy PKGBUILD'}
-                  </button>
-                </div>
-                <pre className="code-block">{pkgbuild}</pre>
+              <div className="info-row">
+                <span className="info-label">Version</span>
+                <span className="info-value font-mono">{pkg.Version}</span>
               </div>
-            ) : (
-              <div className="empty-state">
-                <div className="empty-icon">📄</div>
-                <div className="empty-title">PKGBUILD not available</div>
+              <div className="info-row">
+                <span className="info-label">Maintainer</span>
+                <span className="info-value">{pkg.Maintainer || 'Community'}</span>
               </div>
-            )
-          )}
-        </div>
+              <div className="info-row">
+                <span className="info-label">Dependencies</span>
+                <span className="info-value">{deps.length > 0 ? `${deps.length} required packages` : 'None'}</span>
+              </div>
+            </div>
 
-        {/* Footer */}
-        <div className="modal-footer">
-          {isInstalled ? (
-            <>
-              <button className="btn btn-installed btn-lg" disabled>✓ Installed</button>
-              <button className="btn btn-danger btn-lg" onClick={handleRemove} disabled={removing}>
-                {removing ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Removing…</> : '🗑 Remove'}
+            <div style={{ display: 'flex', gap: 10, marginTop: 'auto', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setConfirmingInstall(false)}>
+                Cancel
               </button>
-            </>
-          ) : (
-            <button className="btn btn-primary btn-lg" onClick={handleInstall} disabled={installing}>
-              {installing ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Installing…</> : `Get ${pkg.Name}`}
-            </button>
-          )}
-          <button className="btn btn-ghost btn-lg" onClick={onClose} style={{ marginLeft: 'auto' }}>Done</button>
-        </div>
+              <button className="btn btn-primary" onClick={handleConfirmedInstall}>
+                Build & Install Now
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Tabs */}
+            <div className="modal-tabs">
+              {['info', 'deps', 'pkgbuild'].map(t => (
+                <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => handleTabChange(t)}>
+                  {t === 'info' ? 'Overview' : t === 'deps' ? `Dependencies (${deps.length})` : 'PKGBUILD'}
+                </button>
+              ))}
+            </div>
+
+            {/* Body */}
+            <div className="modal-body">
+              {tab === 'info' && (
+                <>
+                  <div className="stats-grid">
+                    <div className="stat-card">
+                      <div className="stat-card-value" style={{ color: 'var(--warning)' }}>★ {formatNumber(pkg.NumVotes)}</div>
+                      <div className="stat-card-label">Votes</div>
+                    </div>
+                    <div className="stat-card">
+                      <div className="stat-card-value" style={{ color: 'var(--accent)' }}>📈 {pkg.Popularity ? pkg.Popularity.toFixed(2) : '0'}</div>
+                      <div className="stat-card-label">Popularity</div>
+                    </div>
+                    <div className="stat-card">
+                      <div className="stat-card-value" style={{ color: 'var(--success)' }}>🕐 {timeAgo(pkg.LastModified)}</div>
+                      <div className="stat-card-label">Last Updated</div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 18 }}>
+                    {pkg.Description || 'No description available for this package.'}
+                  </div>
+
+                  {[
+                    ['Package Base', pkg.PackageBase],
+                    ['Maintainer', pkg.Maintainer || 'None'],
+                    ['First Submitted', timeAgo(pkg.FirstSubmitted)],
+                    ['License', pkg.License?.join(', ')],
+                  ].filter(([, v]) => v).map(([label, value]) => (
+                    <div className="info-row" key={label}>
+                      <span className="info-label">{label}</span>
+                      <span className="info-value">{value}</span>
+                    </div>
+                  ))}
+                  {pkg.URL && (
+                    <div className="info-row">
+                      <span className="info-label">Upstream</span>
+                      <a className="info-link" href={pkg.URL} target="_blank" rel="noreferrer">{pkg.URL} ↗</a>
+                    </div>
+                  )}
+                  <div className="info-row">
+                    <span className="info-label">AUR Page</span>
+                    <a className="info-link" href={`https://aur.archlinux.org/packages/${pkg.Name}`} target="_blank" rel="noreferrer">
+                      aur.archlinux.org/packages/{pkg.Name} ↗
+                    </a>
+                  </div>
+                </>
+              )}
+
+              {tab === 'deps' && (
+                <>
+                  {deps.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontWeight: 600 }}>
+                        Runtime Dependencies ({deps.length})
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {deps.map(d => (
+                          <span
+                            key={d}
+                            className="chip chip-indigo"
+                            style={{ cursor: 'pointer' }}
+                            title={`Inspect ${d}`}
+                            onClick={() => onSelectDependency && onSelectDependency(d.split(/[<>=]/)[0])}
+                          >
+                            {d} ↗
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {optDeps.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontWeight: 600 }}>
+                        Optional Dependencies ({optDeps.length})
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {optDeps.map(d => (
+                          <span key={d} className="chip chip-gray" title={d}>
+                            {d.split(':')[0]}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {conflicts.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontWeight: 600 }}>
+                        Conflicts
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {conflicts.map(d => <span key={d} className="chip chip-red">{d}</span>)}
+                      </div>
+                    </div>
+                  )}
+                  {deps.length === 0 && optDeps.length === 0 && (
+                    <div className="empty-state">
+                      <div className="empty-icon">📦</div>
+                      <div className="empty-title">No Dependencies</div>
+                      <div className="empty-desc">This package has no declared dependencies.</div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {tab === 'pkgbuild' && (
+                pkgbuildLoading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner-apple" /></div>
+                ) : pkgbuild ? (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={handleCopyPkgbuild}>
+                        {copied ? '✓ Copied' : '📋 Copy PKGBUILD'}
+                      </button>
+                    </div>
+                    <pre className="code-block">{pkgbuild}</pre>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">📄</div>
+                    <div className="empty-title">PKGBUILD not available</div>
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="modal-footer">
+              {isInstalled ? (
+                <>
+                  <button className="btn btn-installed" disabled>✓ Installed</button>
+                  <button className="btn btn-danger" onClick={handleRemove}>
+                    🗑 Remove
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-primary" onClick={() => setConfirmingInstall(true)}>
+                  Install {displayName}
+                </button>
+              )}
+              <button className="btn btn-ghost" onClick={onClose} style={{ marginLeft: 'auto' }}>
+                Done
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

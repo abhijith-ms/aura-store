@@ -87,3 +87,9 @@ export function resolvePackageLogo(pkgName) {
 
   return null;
 }
+
+export function getPackageBrandColor(pkgName) {
+  const info = resolvePackageLogo(pkgName);
+  return info?.color || null;
+}
+

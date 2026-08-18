@@ -13,6 +13,56 @@ export const getPackageInfo = async (pkg) => {
   return data.results?.[0] || null;
 };
 
+// Known marketing display names for major software
+const KNOWN_DISPLAY_NAMES = {
+  'visual-studio-code-bin': 'Visual Studio Code',
+  'spotify': 'Spotify',
+  'google-chrome': 'Google Chrome',
+  'zen-browser-bin': 'Zen Browser',
+  'discord': 'Discord',
+  'brave-bin': 'Brave Browser',
+  'telegram-desktop': 'Telegram Desktop',
+  'obs-studio-git': 'OBS Studio',
+  'steam': 'Steam',
+  'docker-desktop': 'Docker Desktop',
+  'postman-bin': 'Postman',
+  'insomnia-bin': 'Insomnia',
+  'sublime-text-4': 'Sublime Text',
+  'neovim-git': 'Neovim',
+  'vlc-git': 'VLC Media Player',
+  'retroarch': 'RetroArch',
+  'prismlauncher-bin': 'Prism Launcher',
+  'alacritty-git': 'Alacritty',
+  'kitty-git': 'Kitty Terminal',
+  'btop': 'Btop++',
+  'fastfetch-git': 'Fastfetch',
+  'stremio': 'Stremio',
+  'tor-browser-bin': 'Tor Browser',
+  'vivaldi': 'Vivaldi',
+  'signal-desktop': 'Signal Desktop',
+  'slack-desktop': 'Slack',
+  'gimp': 'GIMP',
+  'inkscape': 'Inkscape',
+  'blender': 'Blender',
+  'audacity': 'Audacity',
+  'kodi': 'Kodi',
+  'paru': 'Paru AUR Helper',
+  'yay': 'Yay AUR Helper',
+  'cursor-bin': 'Cursor IDE',
+  'antigravity-ide': 'Antigravity IDE',
+  'kiro-ide': 'Kiro IDE',
+};
+
+export const getAppDisplayName = (pkgName) => {
+  if (!pkgName) return '';
+  const key = pkgName.toLowerCase().trim();
+  if (KNOWN_DISPLAY_NAMES[key]) return KNOWN_DISPLAY_NAMES[key];
+  const baseKey = key.replace(/-(?:bin|git|desktop|electron|app|nightly|preview|stable|beta)$/, '');
+  if (KNOWN_DISPLAY_NAMES[baseKey]) return KNOWN_DISPLAY_NAMES[baseKey];
+  return pkgName;
+};
+
+
 export const getMultiplePackageInfo = async (pkgList) => {
   if (!pkgList || pkgList.length === 0) return [];
   try {
