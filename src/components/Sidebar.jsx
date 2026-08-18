@@ -2,7 +2,7 @@ import { CATEGORIES } from '../services/aurApi';
 
 const NAV = [
   { id: 'explore', icon: '✦', label: 'Explore' },
-  { id: 'trending', icon: '🔥', label: 'Trending' },
+  { id: 'trending', icon: '🔥', label: 'Top Charts' },
   { id: 'installed', icon: '✓', label: 'Installed' },
   { id: 'updates', icon: '↑', label: 'Updates' },
 ];
@@ -15,7 +15,7 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
         <div className="sidebar-logo-text">Aura Store</div>
       </div>
 
-      <div className="nav-section-label">Navigate</div>
+      <div className="nav-section-label">Discover</div>
       {NAV.map(item => (
         <div
           key={item.id}
@@ -33,12 +33,12 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
         </div>
       ))}
 
-      <div className="nav-section-label" style={{ marginTop: 8 }}>Categories</div>
+      <div className="nav-section-label" style={{ marginTop: 10 }}>Categories</div>
       {CATEGORIES.map(cat => (
         <div
           key={cat.id}
           className={`nav-item ${active === cat.id ? 'active' : ''}`}
-          onClick={() => onNav(cat.id, cat.query)}
+          onClick={() => onNav(cat.id)}
         >
           <span className="nav-icon">{cat.icon}</span>
           {cat.label}
@@ -46,9 +46,13 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
       ))}
 
       <div className="sidebar-bottom">
-        <div className="nav-item" style={{ opacity: 0.6, cursor: 'default' }}>
-          <span className="nav-icon">🐧</span>
-          CachyOS / Arch
+        <div style={{ padding: '4px 10px', fontSize: 11, color: 'var(--label-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Search</span>
+          <kbd style={{ background: 'var(--fill-quaternary)', border: '1px solid var(--separator)', borderRadius: 4, padding: '2px 5px', fontSize: 10, fontFamily: 'monospace' }}>⌘K</kbd>
+        </div>
+        <div className="nav-item" style={{ opacity: 0.7, cursor: 'default', marginTop: 4, padding: '6px 10px', fontSize: 12 }}>
+          <span className="nav-icon" style={{ fontSize: 12 }}>⚡</span>
+          <span style={{ fontSize: 11, color: 'var(--label-secondary)' }}>Backend: paru / AUR v5</span>
         </div>
       </div>
     </nav>

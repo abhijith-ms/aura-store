@@ -4,8 +4,8 @@ import AppCard from './components/AppCard';
 import PackageDetail from './components/PackageDetail';
 import TerminalDrawer from './components/TerminalDrawer';
 import {
-  searchPackages, getInstalled, getUpdates, getPackageInfo,
-  streamInstall, FEATURED, getPackageIcon, formatNumber, timeAgo
+  searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
+  streamInstall, FEATURED, TRENDING_NAMES, CATEGORIES, getPackageIcon, formatNumber, timeAgo
 } from './services/aurApi';
 
 // ---------- Toast ----------
@@ -23,7 +23,7 @@ function ToastStack({ toasts }) {
 }
 
 // ---------- Installed View ----------
-function InstalledTab({ packages, installed, onSelect, onQuickInstall }) {
+function InstalledTab({ packages, installed, onSelect }) {
   if (packages.length === 0) return (
     <div className="empty-state">
       <div className="empty-icon">📦</div>
@@ -40,21 +40,21 @@ function InstalledTab({ packages, installed, onSelect, onQuickInstall }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {packages.map(pkg => (
           <div key={pkg.name}
-            onClick={() => onSelect({ Name: pkg.name, Version: pkg.version, Description: 'AUR Package' })}
+            onClick={() => onSelect({ Name: pkg.name, Version: pkg.version, Description: 'Locally installed AUR package' })}
             style={{
               display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
-              background: 'var(--surface-1)', border: '1px solid var(--glass-border)',
-              borderRadius: 'var(--radius)', cursor: 'pointer', transition: 'all 0.18s'
+              background: 'var(--fill-quaternary)', border: '1px solid var(--separator)',
+              borderRadius: 'var(--radius-lg)', cursor: 'pointer', transition: 'all 0.18s'
             }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--glass-border-hover)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--fill-primary)'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--separator)'}
           >
             <div style={{ fontSize: 24 }}>{getPackageIcon(pkg.name)}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--label-primary)' }}>{pkg.name}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'monospace' }}>v{pkg.version}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'var(--font-mono)' }}>v{pkg.version}</div>
             </div>
-            <span className="chip chip-green">✓ AUR</span>
+            <span className="chip chip-green">✓ Installed</span>
           </div>
         ))}
       </div>
@@ -63,7 +63,7 @@ function InstalledTab({ packages, installed, onSelect, onQuickInstall }) {
 }
 
 // ---------- Updates View ----------
-function UpdatesTab({ updates, installed, onInstallStart, onInstallDone, addToast, openTerminal }) {
+function UpdatesTab({ updates, onInstallStart, onInstallDone, addToast, openTerminal }) {
   const [installing, setInstalling] = useState(new Set());
   const handleUpdate = (pkg) => {
     setInstalling(prev => new Set([...prev, pkg]));
@@ -72,7 +72,7 @@ function UpdatesTab({ updates, installed, onInstallStart, onInstallDone, addToas
     streamInstall(pkg, 'install', (log, type) => onInstallStart(pkg, 'install', log, type), (ok) => {
       setInstalling(prev => { const s = new Set(prev); s.delete(pkg); return s; });
       onInstallDone(pkg, 'install', ok);
-      addToast(ok ? `${pkg} updated!` : `Failed to update ${pkg}`, ok ? 'success' : 'error');
+      addToast(ok ? `${pkg} updated successfully!` : `Failed to update ${pkg}`, ok ? 'success' : 'error');
     });
   };
 
@@ -88,19 +88,19 @@ function UpdatesTab({ updates, installed, onInstallStart, onInstallDone, addToas
     <div>
       <div className="section-header">
         <div className="section-title">Available Updates</div>
-        <div className="section-count">{updates.length} updates</div>
+        <div className="section-count">{updates.length} updates available</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {updates.map(u => (
           <div key={u.name} style={{
             display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
-            background: 'var(--surface-1)', border: '1px solid var(--glass-border)',
-            borderRadius: 'var(--radius)'
+            background: 'var(--fill-quaternary)', border: '1px solid var(--separator)',
+            borderRadius: 'var(--radius-lg)'
           }}>
             <div style={{ fontSize: 22 }}>{getPackageIcon(u.name)}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13.5 }}>{u.name}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'monospace' }}>
+              <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'var(--font-mono)' }}>
                 {u.current} → <span style={{ color: 'var(--apple-green)' }}>{u.latest}</span>
               </div>
             </div>
@@ -123,7 +123,7 @@ function HeroCard({ pkg, installed, onSelect, onInstall }) {
   const isInstalled = installed.has(pkg.data?.Name);
   if (!pkg.data) return null;
   return (
-    <div className="hero" style={{ cursor: 'pointer' }} onClick={() => onSelect(pkg.data)}>
+    <div className="hero" onClick={() => onSelect(pkg.data)}>
       <div className="hero-icon">{getPackageIcon(pkg.name)}</div>
       <div className="hero-info">
         <div className="hero-label">{pkg.label}</div>
@@ -140,7 +140,7 @@ function HeroCard({ pkg, installed, onSelect, onInstall }) {
           <button className="btn btn-installed btn-lg" onClick={e => e.stopPropagation()}>✓ Installed</button>
         ) : (
           <button className="btn btn-primary btn-lg" onClick={e => { e.stopPropagation(); onInstall(pkg.data); }}>
-            ⬇ Install
+            Get
           </button>
         )}
       </div>
@@ -160,25 +160,64 @@ export default function App() {
   const [aurInstalled, setAurInstalled] = useState([]);
   const [updates, setUpdates] = useState([]);
   const [featured, setFeatured] = useState([]);
+  const [trending, setTrending] = useState([]);
+  const [categoryPkgs, setCategoryPkgs] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [termOpen, setTermOpen] = useState(false);
   const [termLogs, setTermLogs] = useState([]);
   const [termInstalling, setTermInstalling] = useState(false);
   const [termPkg, setTermPkg] = useState('');
+  const searchInputRef = useRef(null);
   const searchTimer = useRef(null);
 
-  // Load installed & updates on mount
+  // Load installed, updates & trending on mount
   useEffect(() => {
     getInstalled().then(({ aur, allInstalled }) => {
       setInstalled(new Set(allInstalled));
-      setAurInstalled(aur);
+      setAurInstalled(aur || []);
     }).catch(() => {});
+
     getUpdates().then(({ updates }) => setUpdates(updates || [])).catch(() => {});
+
     // Load featured
     Promise.all(FEATURED.map(f =>
       getPackageInfo(f.name).then(data => ({ ...f, data })).catch(() => ({ ...f, data: null }))
     )).then(setFeatured);
+
+    // Load trending
+    getMultiplePackageInfo(TRENDING_NAMES).then(setTrending);
   }, []);
+
+  // Keyboard shortcut: Cmd+K / Ctrl+K & Escape
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === 'Escape') {
+        if (selectedPkg) {
+          setSelectedPkg(null);
+        } else if (query) {
+          setQuery('');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPkg, query]);
+
+  // Load category packages when switching to a category view
+  useEffect(() => {
+    const activeCategory = CATEGORIES.find(c => c.id === view);
+    if (activeCategory) {
+      setLoading(true);
+      getMultiplePackageInfo(activeCategory.packages).then(pkgs => {
+        setCategoryPkgs(pkgs);
+        setLoading(false);
+      });
+    }
+  }, [view]);
 
   // Debounced search
   useEffect(() => {
@@ -189,7 +228,7 @@ export default function App() {
       const res = await searchPackages(query, sortBy).catch(() => []);
       setResults(res.slice(0, 60));
       setLoading(false);
-    }, 380);
+    }, 320);
     return () => clearTimeout(searchTimer.current);
   }, [query, sortBy]);
 
@@ -214,7 +253,7 @@ export default function App() {
       setTermLogs(prev => [...prev, { text: `✓ ${action === 'remove' ? 'Removed' : 'Installed'} ${pkg} successfully!`, type: 'done' }]);
       getInstalled().then(({ aur, allInstalled }) => {
         setInstalled(new Set(allInstalled));
-        setAurInstalled(aur);
+        setAurInstalled(aur || []);
       }).catch(() => {});
     } else {
       setTermLogs(prev => [...prev, { text: `✕ ${action} failed for ${pkg}`, type: 'error' }]);
@@ -236,18 +275,25 @@ export default function App() {
     );
   }, [handleInstallStart, handleInstallDone, addToast]);
 
-  const handleNav = (id, categoryQuery) => {
-    setView(id);
-    if (categoryQuery) {
-      setQuery(categoryQuery);
-    } else if (id === 'explore' || id === 'trending') {
-      setQuery('');
+  const handleDependencyClick = async (depName) => {
+    setLoading(true);
+    const info = await getPackageInfo(depName);
+    if (info) {
+      setSelectedPkg(info);
+    } else {
+      setQuery(depName);
+      setSelectedPkg(null);
     }
+    setLoading(false);
+  };
+
+  const handleNav = (id) => {
+    setView(id);
+    setQuery('');
   };
 
   const isSearching = query.trim().length > 0;
-  const showExplore = view === 'explore' && !isSearching;
-  const showSearch = isSearching;
+  const currentCategory = CATEGORIES.find(c => c.id === view);
 
   return (
     <div className="app-shell">
@@ -264,13 +310,14 @@ export default function App() {
           <div className="search-wrapper">
             <span className="search-icon">⌕</span>
             <input
+              ref={searchInputRef}
               className="search-input"
               type="text"
-              placeholder="Search AUR packages…"
+              placeholder="Search AUR packages… (⌘K)"
               value={query}
-              onChange={e => { setQuery(e.target.value); setView('explore'); }}
-              autoFocus
+              onChange={e => setQuery(e.target.value)}
             />
+            {!query && <span className="search-shortcut">⌘K</span>}
           </div>
           <div className="header-actions">
             <select className="sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
@@ -279,37 +326,50 @@ export default function App() {
               <option value="votes">Sort: Votes</option>
               <option value="lastmodified">Sort: Updated</option>
             </select>
-            <button className="header-btn" title="Refresh" onClick={() => { getInstalled().then(({ aur, allInstalled }) => { setInstalled(new Set(allInstalled)); setAurInstalled(aur); }); getUpdates().then(({ updates }) => setUpdates(updates || [])); }}>↺</button>
+            <button className="header-btn" title="Refresh data" onClick={() => {
+              getInstalled().then(({ aur, allInstalled }) => { setInstalled(new Set(allInstalled)); setAurInstalled(aur || []); });
+              getUpdates().then(({ updates }) => setUpdates(updates || []));
+              addToast('Refreshed package lists', 'info');
+            }}>↺</button>
           </div>
         </div>
 
         {/* Content */}
         <div className="content" style={{ paddingBottom: termOpen ? 268 : 24 }}>
 
-          {/* Installed Tab */}
-          {view === 'installed' && !isSearching && (
-            <InstalledTab
-              packages={aurInstalled}
-              installed={installed}
-              onSelect={setSelectedPkg}
-              onQuickInstall={handleQuickInstall}
-            />
+          {/* Search results */}
+          {isSearching && (
+            <div>
+              <div className="section-header">
+                <div className="section-title">Results for "{query}"</div>
+                {!loading && <div className="section-count">{results.length} packages found</div>}
+                {loading && <div className="spinner" />}
+              </div>
+              {results.length === 0 && !loading ? (
+                <div className="empty-state">
+                  <div className="empty-icon">🔍</div>
+                  <div className="empty-title">No packages found</div>
+                  <div className="empty-desc">Try a different search term or check the package spelling.</div>
+                </div>
+              ) : (
+                <div className="app-grid">
+                  {results.map((pkg, i) => (
+                    <AppCard
+                      key={pkg.Name}
+                      pkg={pkg}
+                      index={i}
+                      installed={installed}
+                      onSelect={setSelectedPkg}
+                      onQuickInstall={handleQuickInstall}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Updates Tab */}
-          {view === 'updates' && !isSearching && (
-            <UpdatesTab
-              updates={updates}
-              installed={installed}
-              onInstallStart={handleInstallStart}
-              onInstallDone={handleInstallDone}
-              addToast={addToast}
-              openTerminal={() => setTermOpen(true)}
-            />
-          )}
-
-          {/* Explore / Featured */}
-          {showExplore && (
+          {/* Explore View */}
+          {!isSearching && view === 'explore' && (
             <>
               {featured.filter(f => f.data).length > 0 && (
                 <div>
@@ -328,7 +388,8 @@ export default function App() {
               {featured.filter(f => f.data).length > 1 && (
                 <div>
                   <div className="section-header">
-                    <div className="section-title">Picked For You</div>
+                    <div className="section-title">Popular Picks</div>
+                    <div className="section-count">Curated essentials</div>
                   </div>
                   <div className="app-grid">
                     {featured.filter(f => f.data).slice(1).map((f, i) => (
@@ -345,29 +406,75 @@ export default function App() {
                 </div>
               )}
 
-              <div className="empty-state" style={{ opacity: 0.4, padding: 20 }}>
-                <div style={{ fontSize: 13 }}>Search for any AUR package above to discover and install it.</div>
-              </div>
+              {/* Trending Preview */}
+              {trending.length > 0 && (
+                <div>
+                  <div className="section-header">
+                    <div className="section-title">🔥 Top Charts Preview</div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setView('trending')}>View All Top Charts →</button>
+                  </div>
+                  <div className="app-grid">
+                    {trending.slice(0, 6).map((pkg, i) => (
+                      <AppCard
+                        key={pkg.Name}
+                        pkg={pkg}
+                        index={i}
+                        rank={`#${i + 1}`}
+                        installed={installed}
+                        onSelect={setSelectedPkg}
+                        onQuickInstall={handleQuickInstall}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
-          {/* Search results */}
-          {showSearch && (
+          {/* Trending / Top Charts View */}
+          {!isSearching && view === 'trending' && (
             <div>
               <div className="section-header">
-                <div className="section-title">Results for "{query}"</div>
-                {!loading && <div className="section-count">{results.length} packages</div>}
-                {loading && <div className="spinner" />}
+                <div className="section-title">🔥 Top Charts</div>
+                <div className="section-count">Most popular & highly voted AUR packages</div>
               </div>
-              {results.length === 0 && !loading ? (
-                <div className="empty-state">
-                  <div className="empty-icon">🔍</div>
-                  <div className="empty-title">No packages found</div>
-                  <div className="empty-desc">Try a different search term or check the spelling.</div>
+              <div className="app-grid">
+                {trending.map((pkg, i) => (
+                  <AppCard
+                    key={pkg.Name}
+                    pkg={pkg}
+                    index={i}
+                    rank={`#${i + 1}`}
+                    installed={installed}
+                    onSelect={setSelectedPkg}
+                    onQuickInstall={handleQuickInstall}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Category View */}
+          {!isSearching && currentCategory && (
+            <div>
+              <div className="category-banner" style={{ marginBottom: 20 }}>
+                <div className="hero-icon">{currentCategory.icon}</div>
+                <div className="hero-info">
+                  <div className="hero-name">{currentCategory.title}</div>
+                  <div className="hero-desc">{currentCategory.subtitle}</div>
                 </div>
+              </div>
+
+              <div className="section-header">
+                <div className="section-title">Curated in {currentCategory.label}</div>
+                <div className="section-count">{categoryPkgs.length} apps</div>
+              </div>
+
+              {loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
               ) : (
                 <div className="app-grid">
-                  {results.map((pkg, i) => (
+                  {categoryPkgs.map((pkg, i) => (
                     <AppCard
                       key={pkg.Name}
                       pkg={pkg}
@@ -381,6 +488,27 @@ export default function App() {
               )}
             </div>
           )}
+
+          {/* Installed Tab */}
+          {!isSearching && view === 'installed' && (
+            <InstalledTab
+              packages={aurInstalled}
+              installed={installed}
+              onSelect={setSelectedPkg}
+            />
+          )}
+
+          {/* Updates Tab */}
+          {!isSearching && view === 'updates' && (
+            <UpdatesTab
+              updates={updates}
+              onInstallStart={handleInstallStart}
+              onInstallDone={handleInstallDone}
+              addToast={addToast}
+              openTerminal={() => setTermOpen(true)}
+            />
+          )}
+
         </div>
       </div>
 
@@ -401,6 +529,7 @@ export default function App() {
             );
           }}
           onInstallDone={handleInstallDone}
+          onSelectDependency={handleDependencyClick}
           addToast={addToast}
         />
       )}

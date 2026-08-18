@@ -1,6 +1,6 @@
 import { getPackageIcon, formatNumber } from '../services/aurApi';
 
-export default function AppCard({ pkg, installed, onSelect, onQuickInstall, index = 0 }) {
+export default function AppCard({ pkg, installed, onSelect, onQuickInstall, index = 0, rank = null }) {
   const isInstalled = installed.has(pkg.Name);
   const icon = getPackageIcon(pkg.Name);
 
@@ -16,6 +16,11 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall, inde
       onClick={() => onSelect(pkg)}
     >
       <div className="card-top">
+        {rank !== null && (
+          <div className="card-rank">
+            {rank}
+          </div>
+        )}
         <div className={`card-icon ${isInstalled ? 'installed-icon' : ''}`}>{icon}</div>
         <div className="card-title-block">
           <div className="card-name">{pkg.Name}</div>
