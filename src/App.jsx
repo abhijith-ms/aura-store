@@ -167,6 +167,7 @@ function UpdatesTab({
   updates,
   onUpdateSingle,
   onUpdateBatch,
+  onShowLogs,
   batchActive,
   batchIndex,
   batchList,
@@ -279,7 +280,24 @@ function UpdatesTab({
               ) : status === 'done' ? (
                 <span className="chip chip-green" style={{ padding: '4px 8px' }}>✓ Updated</span>
               ) : status === 'failed' ? (
-                <span className="chip chip-red" style={{ padding: '4px 8px' }}>✕ Failed</span>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span className="chip chip-red" style={{ padding: '4px 8px' }}>✕ Failed</span>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={onShowLogs}
+                    title="View failure build logs"
+                  >
+                    View Logs
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => onUpdateSingle(u.name)}
+                    disabled={batchActive}
+                    title="Retry updating this package"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : status === 'waiting' ? (
                 <span className="chip chip-gray" style={{ padding: '4px 8px' }}>⏳ Queued</span>
               ) : (
@@ -431,7 +449,13 @@ function MainApp() {
       setBatchActive(false);
       setIsProcessing(false);
       setActivePkg('');
-      addToast('All selected updates completed!', 'success');
+      
+      const failedCount = Object.values(pkgStatusMap).filter(s => s === 'failed').length;
+      if (failedCount === 0) {
+        addToast('All selected updates completed successfully!', 'success');
+      } else {
+        addToast(`Updates finished: ${failedCount} package(s) failed. Click View Logs to inspect.`, 'error');
+      }
       refreshPackages();
       return;
     }
@@ -715,12 +739,14 @@ function MainApp() {
               updates={updates}
               onUpdateSingle={handleUpdateSingle}
               onUpdateBatch={handleUpdateBatch}
+              onShowLogs={() => setTermOpen(true)}
               batchActive={batchActive}
               batchIndex={batchIndex}
               batchList={batchList}
               pkgStatusMap={pkgStatusMap}
             />
           ) : null}
+
 
         </div>
       </div>
