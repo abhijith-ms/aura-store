@@ -51,8 +51,8 @@ function InstalledTab({ packages, installed, onSelect, onQuickInstall }) {
           >
             <div style={{ fontSize: 24 }}>{getPackageIcon(pkg.name)}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-1)' }}>{pkg.name}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--text-3)', fontFamily: 'monospace' }}>v{pkg.version}</div>
+              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--label-primary)' }}>{pkg.name}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'monospace' }}>v{pkg.version}</div>
             </div>
             <span className="chip chip-green">✓ AUR</span>
           </div>
@@ -100,8 +100,8 @@ function UpdatesTab({ updates, installed, onInstallStart, onInstallDone, addToas
             <div style={{ fontSize: 22 }}>{getPackageIcon(u.name)}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13.5 }}>{u.name}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--text-3)', fontFamily: 'monospace' }}>
-                {u.current} → <span style={{ color: 'var(--green)' }}>{u.latest}</span>
+              <div style={{ fontSize: 11.5, color: 'var(--label-tertiary)', fontFamily: 'monospace' }}>
+                {u.current} → <span style={{ color: 'var(--apple-green)' }}>{u.latest}</span>
               </div>
             </div>
             <button
@@ -331,10 +331,11 @@ export default function App() {
                     <div className="section-title">Picked For You</div>
                   </div>
                   <div className="app-grid">
-                    {featured.filter(f => f.data).slice(1).map(f => (
+                    {featured.filter(f => f.data).slice(1).map((f, i) => (
                       <AppCard
                         key={f.name}
                         pkg={f.data}
+                        index={i}
                         installed={installed}
                         onSelect={setSelectedPkg}
                         onQuickInstall={handleQuickInstall}
@@ -366,10 +367,11 @@ export default function App() {
                 </div>
               ) : (
                 <div className="app-grid">
-                  {results.map(pkg => (
+                  {results.map((pkg, i) => (
                     <AppCard
                       key={pkg.Name}
                       pkg={pkg}
+                      index={i}
                       installed={installed}
                       onSelect={setSelectedPkg}
                       onQuickInstall={handleQuickInstall}

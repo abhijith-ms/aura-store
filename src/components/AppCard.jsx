@@ -1,6 +1,6 @@
 import { getPackageIcon, formatNumber } from '../services/aurApi';
 
-export default function AppCard({ pkg, installed, onSelect, onQuickInstall }) {
+export default function AppCard({ pkg, installed, onSelect, onQuickInstall, index = 0 }) {
   const isInstalled = installed.has(pkg.Name);
   const icon = getPackageIcon(pkg.Name);
 
@@ -10,7 +10,11 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall }) {
   };
 
   return (
-    <div className="app-card" onClick={() => onSelect(pkg)}>
+    <div
+      className="app-card"
+      style={{ animationDelay: `${Math.min(index * 30, 300)}ms` }}
+      onClick={() => onSelect(pkg)}
+    >
       <div className="card-top">
         <div className={`card-icon ${isInstalled ? 'installed-icon' : ''}`}>{icon}</div>
         <div className="card-title-block">
@@ -18,7 +22,7 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall }) {
           <div className="card-version">v{pkg.Version}</div>
         </div>
         {pkg.OutOfDate && (
-          <span className="chip chip-amber" style={{ fontSize: 10 }}>⚠</span>
+          <span className="chip chip-orange" style={{ fontSize: 10 }}>⚠</span>
         )}
       </div>
 
@@ -38,7 +42,7 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall }) {
         {isInstalled ? (
           <button className="btn btn-installed btn-sm" onClick={handleInstallClick}>✓ Installed</button>
         ) : (
-          <button className="btn btn-primary btn-sm" onClick={handleInstallClick}>⬇ Install</button>
+          <button className="btn btn-primary btn-sm" onClick={handleInstallClick}>Get</button>
         )}
       </div>
     </div>

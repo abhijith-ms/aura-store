@@ -32,7 +32,7 @@ export default function TerminalDrawer({ open, onToggle, logs, installing, packa
               : 'Terminal — Ready'}
         </div>
         {installing && <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />}
-        <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{open ? '▼' : '▲'}</div>
+        <div style={{ fontSize: 12, color: 'var(--label-tertiary)' }}>{open ? '▼' : '▲'}</div>
       </div>
       <div className="terminal-body" ref={bodyRef}>
         {logs.length === 0 ? (

@@ -60,8 +60,8 @@ export default function PackageDetail({ pkg, installed, onClose, onInstallStart,
             </div>
             <div className="modal-chips">
               {isInstalled && <span className="chip chip-green">✓ Installed</span>}
-              {pkg.OutOfDate && <span className="chip chip-amber">⚠ Out of Date</span>}
-              {pkg.Popularity > 5 && <span className="chip chip-purple">🔥 Popular</span>}
+              {pkg.OutOfDate && <span className="chip chip-orange">⚠ Out of Date</span>}
+              {pkg.Popularity > 5 && <span className="chip chip-indigo">🔥 Popular</span>}
               {pkg.License?.map(l => <span key={l} className="chip chip-gray">{l}</span>)}
             </div>
           </div>
@@ -83,20 +83,20 @@ export default function PackageDetail({ pkg, installed, onClose, onInstallStart,
             <>
               <div className="stats-grid">
                 <div className="stat-card">
-                  <div className="stat-card-value">⭐ {formatNumber(pkg.NumVotes)}</div>
+                  <div className="stat-card-value" style={{ color: 'var(--apple-yellow)' }}>⭐ {formatNumber(pkg.NumVotes)}</div>
                   <div className="stat-card-label">Votes</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-card-value">📈 {pkg.Popularity?.toFixed(2)}</div>
+                  <div className="stat-card-value" style={{ color: 'var(--apple-blue)' }}>📈 {pkg.Popularity?.toFixed(2)}</div>
                   <div className="stat-card-label">Popularity</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-card-value">🕐 {timeAgo(pkg.LastModified)}</div>
+                  <div className="stat-card-value" style={{ color: 'var(--apple-green)' }}>🕐 {timeAgo(pkg.LastModified)}</div>
                   <div className="stat-card-label">Updated</div>
                 </div>
               </div>
 
-              <div style={{ fontSize: 13.5, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 18 }}>
+              <div style={{ fontSize: 13.5, color: 'var(--label-secondary)', lineHeight: 1.6, marginBottom: 18 }}>
                 {pkg.Description || 'No description available.'}
               </div>
 
@@ -133,15 +133,15 @@ export default function PackageDetail({ pkg, installed, onClose, onInstallStart,
             <>
               {deps.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Dependencies ({deps.length})</div>
+                  <div style={{ fontSize: 12, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Dependencies ({deps.length})</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {deps.map(d => <span key={d} className="chip chip-purple">{d}</span>)}
+                    {deps.map(d => <span key={d} className="chip chip-indigo">{d}</span>)}
                   </div>
                 </div>
               )}
               {optDeps.length > 0 && (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Optional ({optDeps.length})</div>
+                  <div style={{ fontSize: 12, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Optional ({optDeps.length})</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {optDeps.map(d => <span key={d} className="chip chip-gray">{d.split(':')[0]}</span>)}
                   </div>
@@ -149,7 +149,7 @@ export default function PackageDetail({ pkg, installed, onClose, onInstallStart,
               )}
               {conflicts.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Conflicts</div>
+                  <div style={{ fontSize: 12, color: 'var(--label-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Conflicts</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {conflicts.map(d => <span key={d} className="chip chip-red">{d}</span>)}
                   </div>
