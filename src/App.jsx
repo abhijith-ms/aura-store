@@ -11,6 +11,18 @@ import {
   streamInstall, TRENDING_NAMES, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
 } from './services/aurApi';
 
+// Top curated popular packages (4-8 items)
+const CURATED_POPULAR = [
+  'visual-studio-code-bin',
+  'spotify',
+  'zen-browser-bin',
+  'discord',
+  'google-chrome',
+  'brave-bin',
+  'steam',
+  'obs-studio-git',
+];
+
 // Essential CLI tools list for secondary Explore rail
 const ESSENTIAL_TOOLS = ['paru', 'yay', 'btop', 'fastfetch-git', 'alacritty-git', 'timeshift'];
 
@@ -29,9 +41,9 @@ function ToastStack({ toasts }) {
 }
 
 // ---------- Loading Skeleton Grid ----------
-function SkeletonGrid({ count = 6 }) {
+function SkeletonGrid({ count = 4, popular = false }) {
   return (
-    <div className="app-grid">
+    <div className={`app-grid ${popular ? 'popular-grid' : ''}`}>
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="skeleton-card">
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -113,13 +125,13 @@ function InstalledTab({ packages, onSelect }) {
                   gap: 12,
                   padding: '10px 14px',
                   background: 'var(--surface)',
-                  border: '1px solid var(--border)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: 'var(--radius-sm)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--surface-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--surface)'; }}
               >
                 <AppIcon pkgName={pkg.name} size="sm" installed={true} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -226,7 +238,7 @@ function UpdatesTab({
                 gap: 12,
                 padding: '10px 14px',
                 background: 'var(--surface)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-sm)',
               }}
             >
@@ -319,7 +331,7 @@ function MainApp() {
   // Load initial packages
   useEffect(() => {
     refreshPackages();
-    getMultiplePackageInfo(TRENDING_NAMES).then(setPopularPkgs);
+    getMultiplePackageInfo(CURATED_POPULAR).then(setPopularPkgs);
     getMultiplePackageInfo(ESSENTIAL_TOOLS).then(setEssentialPkgs);
   }, [refreshPackages]);
 
@@ -458,17 +470,18 @@ function MainApp() {
 
   const handleNav = (id) => {
     setView(id);
+    setSelectedPkg(null);
     setQuery('');
   };
 
   const isSearching = query.trim().length > 0;
   const currentCategory = CATEGORIES.find(c => c.id === view);
-  const showSortSelector = isSearching || Boolean(currentCategory);
+  const showSortSelector = !selectedPkg && (isSearching || Boolean(currentCategory));
 
   return (
     <div className="app-shell">
       <Sidebar
-        active={view}
+        active={selectedPkg ? '' : view}
         onNav={handleNav}
         installedCount={aurInstalled.length}
         updateCount={updates.length}
@@ -485,7 +498,10 @@ function MainApp() {
               type="text"
               placeholder="Search AUR packages, apps, developers... (Ctrl K)"
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => {
+                setQuery(e.target.value);
+                if (selectedPkg) setSelectedPkg(null);
+              }}
             />
             {!query && <span className="search-shortcut">Ctrl K</span>}
           </div>
@@ -524,8 +540,18 @@ function MainApp() {
         {/* Content Viewport */}
         <div className="content" style={{ paddingBottom: termOpen ? 230 : 26 }}>
 
-          {/* Search Results Mode */}
-          {isSearching && (
+          {/* Dedicated Package Detail Screen */}
+          {selectedPkg ? (
+            <PackageDetail
+              pkg={selectedPkg}
+              installed={installed}
+              onBack={() => setSelectedPkg(null)}
+              onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
+              onSelectDependency={handleDependencyClick}
+              addToast={addToast}
+            />
+          ) : isSearching ? (
+            /* Search Results Mode */
             <div>
               <div className="section-header">
                 <div>
@@ -558,10 +584,8 @@ function MainApp() {
                 </div>
               )}
             </div>
-          )}
-
-          {/* Explore Homepage Mode */}
-          {!isSearching && view === 'explore' && (
+          ) : view === 'explore' ? (
+            /* Explore Homepage Mode */
             <>
               {/* Search-As-Hero Header */}
               <div className="search-hero">
@@ -571,16 +595,16 @@ function MainApp() {
                 </p>
               </div>
 
-              {/* Popular on AUR Rail */}
+              {/* Popular on AUR Rail (Prominent 4-column layout) */}
               <div>
                 <div className="section-header">
                   <div className="section-title">Popular on AUR</div>
-                  <div className="section-count">Community favorites</div>
+                  <div className="section-count">{popularPkgs.length} packages</div>
                 </div>
                 {popularPkgs.length === 0 ? (
-                  <SkeletonGrid count={4} />
+                  <SkeletonGrid count={4} popular={true} />
                 ) : (
-                  <div className="app-grid">
+                  <div className="app-grid popular-grid">
                     {popularPkgs.map((pkg, i) => (
                       <AppCard
                         key={pkg.Name}
@@ -599,7 +623,7 @@ function MainApp() {
               <div>
                 <div className="section-header">
                   <div className="section-title">System & CLI Essentials</div>
-                  <div className="section-count">Utilities for Arch Linux</div>
+                  <div className="section-count">{essentialPkgs.length} utilities</div>
                 </div>
                 {essentialPkgs.length === 0 ? (
                   <SkeletonGrid count={4} />
@@ -619,10 +643,8 @@ function MainApp() {
                 )}
               </div>
             </>
-          )}
-
-          {/* Category View */}
-          {!isSearching && currentCategory && (
+          ) : currentCategory ? (
+            /* Category View */
             <div>
               <div className="category-banner" style={{ marginBottom: 18 }}>
                 <div style={{ fontSize: 28 }}>{currentCategory.icon}</div>
@@ -659,18 +681,14 @@ function MainApp() {
                 </div>
               )}
             </div>
-          )}
-
-          {/* Installed Tab */}
-          {!isSearching && view === 'installed' && (
+          ) : view === 'installed' ? (
+            /* Installed Tab */
             <InstalledTab
               packages={aurInstalled}
               onSelect={setSelectedPkg}
             />
-          )}
-
-          {/* Updates Tab */}
-          {!isSearching && view === 'updates' && (
+          ) : view === 'updates' ? (
+            /* Updates Tab */
             <UpdatesTab
               updates={updates}
               onUpdateSingle={handleUpdateSingle}
@@ -680,22 +698,10 @@ function MainApp() {
               batchList={batchList}
               pkgStatusMap={pkgStatusMap}
             />
-          )}
+          ) : null}
 
         </div>
       </div>
-
-      {/* Package Detail Modal */}
-      {selectedPkg && (
-        <PackageDetail
-          pkg={selectedPkg}
-          installed={installed}
-          onClose={() => setSelectedPkg(null)}
-          onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
-          onSelectDependency={handleDependencyClick}
-          addToast={addToast}
-        />
-      )}
 
       {/* Terminal Drawer (Collapsible) */}
       <TerminalDrawer

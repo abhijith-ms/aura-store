@@ -105,12 +105,7 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
           )}
         </div>
 
-        <div style={{ padding: '2px 8px', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-          <span>Search</span>
-          <kbd style={{ background: 'var(--surface-active)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', fontSize: 10, fontFamily: 'var(--font-mono)' }}>Ctrl K</kbd>
-        </div>
-
-        <div className="nav-item" style={{ opacity: 0.65, cursor: 'default', padding: '2px 8px', fontSize: 11 }}>
+        <div className="nav-item" style={{ opacity: 0.65, cursor: 'default', padding: '4px 8px', fontSize: 11 }}>
           <span className="nav-icon" style={{ fontSize: 11 }}>⚡</span>
           <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>paru / AUR v5</span>
         </div>
