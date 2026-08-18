@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { CATEGORIES } from '../services/aurApi';
 import { useTheme } from '../context/ThemeContext';
 
@@ -8,12 +9,14 @@ const NAV = [
 ];
 
 export default function Sidebar({ active, onNav, installedCount, updateCount }) {
-  const { themeSetting, cycleTheme } = useTheme();
+  const { themeSetting, setThemeSetting } = useTheme();
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const appearanceRef = useRef(null);
 
   const themeLabels = {
-    system: 'System Theme',
-    dark: 'Dark Mode',
-    light: 'Light Mode',
+    system: 'System',
+    dark: 'Dark',
+    light: 'Light',
   };
 
   const themeIcons = {
@@ -21,6 +24,16 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
     dark: '🌙',
     light: '☀️',
   };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (appearanceRef.current && !appearanceRef.current.contains(e.target)) {
+        setAppearanceOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <nav className="sidebar">
@@ -60,22 +73,45 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
       ))}
 
       <div className="sidebar-bottom">
-        <button
-          className="theme-toggle-btn"
-          onClick={cycleTheme}
-          title="Toggle theme (System / Dark / Light)"
-        >
-          <span>{themeIcons[themeSetting]} {themeLabels[themeSetting]}</span>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>⇄</span>
-        </button>
+        {/* Appearance Setting Menu */}
+        <div className="appearance-control" ref={appearanceRef}>
+          <button
+            className="appearance-btn"
+            onClick={() => setAppearanceOpen(o => !o)}
+            title="Appearance setting"
+          >
+            <span>☼ Appearance</span>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+              {themeIcons[themeSetting]} {themeLabels[themeSetting]} ▾
+            </span>
+          </button>
 
-        <div style={{ padding: '4px 8px', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+          {appearanceOpen && (
+            <div className="appearance-menu">
+              {['system', 'light', 'dark'].map(mode => (
+                <button
+                  key={mode}
+                  className={`appearance-option ${themeSetting === mode ? 'active' : ''}`}
+                  onClick={() => {
+                    setThemeSetting(mode);
+                    setAppearanceOpen(false);
+                  }}
+                >
+                  <span>{themeIcons[mode]} {themeLabels[mode]}</span>
+                  {themeSetting === mode && <span style={{ fontSize: 10 }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '2px 8px', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
           <span>Search</span>
           <kbd style={{ background: 'var(--surface-active)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 5px', fontSize: 10, fontFamily: 'var(--font-mono)' }}>Ctrl K</kbd>
         </div>
 
-        <div className="nav-item" style={{ opacity: 0.7, cursor: 'default', padding: '4px 8px', fontSize: 11.5 }}>
-          <span className="nav-icon" style={{ fontSize: 12 }}>⚡</span>
+        <div className="nav-item" style={{ opacity: 0.65, cursor: 'default', padding: '2px 8px', fontSize: 11 }}>
+          <span className="nav-icon" style={{ fontSize: 11 }}>⚡</span>
           <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>paru / AUR v5</span>
         </div>
       </div>

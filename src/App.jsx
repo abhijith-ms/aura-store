@@ -28,6 +28,30 @@ function ToastStack({ toasts }) {
   );
 }
 
+// ---------- Loading Skeleton Grid ----------
+function SkeletonGrid({ count = 6 }) {
+  return (
+    <div className="app-grid">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="skeleton-card">
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div className="skeleton-box" style={{ width: 42, height: 42, borderRadius: 8 }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="skeleton-box" style={{ height: 14, width: '60%' }} />
+              <div className="skeleton-box" style={{ height: 10, width: '40%' }} />
+            </div>
+          </div>
+          <div className="skeleton-box" style={{ height: 28, width: '100%', marginTop: 6 }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+            <div className="skeleton-box" style={{ height: 12, width: '35%' }} />
+            <div className="skeleton-box" style={{ height: 24, width: 55, borderRadius: 6 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------- Installed Library View (with search filter) ----------
 function InstalledTab({ packages, onSelect }) {
   const [filter, setFilter] = useState('');
@@ -45,7 +69,7 @@ function InstalledTab({ packages, onSelect }) {
     return (
       <div className="empty-state">
         <div className="empty-icon">📦</div>
-        <div className="empty-title">No AUR Packages Installed</div>
+        <div className="empty-title">No installed packages</div>
         <div className="empty-desc">Packages you install from the AUR will appear here.</div>
       </div>
     );
@@ -53,17 +77,17 @@ function InstalledTab({ packages, onSelect }) {
 
   return (
     <div>
-      <div className="section-header" style={{ marginBottom: 16 }}>
+      <div className="section-header" style={{ marginBottom: 14 }}>
         <div>
           <div className="section-title">Installed Applications</div>
           <div className="section-count">{packages.length} AUR packages installed</div>
         </div>
 
-        <div style={{ width: 240, position: 'relative' }}>
+        <div style={{ width: 220 }}>
           <input
             type="text"
             className="search-input"
-            style={{ padding: '6px 12px', fontSize: 12.5 }}
+            style={{ padding: '5px 10px', fontSize: 12 }}
             placeholder="Filter installed…"
             value={filter}
             onChange={e => setFilter(e.target.value)}
@@ -72,11 +96,11 @@ function InstalledTab({ packages, onSelect }) {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="empty-state" style={{ padding: 30 }}>
+        <div className="empty-state" style={{ padding: 28 }}>
           <div className="empty-title">No matching installed packages</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filtered.map(pkg => {
             const displayName = getAppDisplayName(pkg.name);
             return (
@@ -86,21 +110,21 @@ function InstalledTab({ packages, onSelect }) {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 14,
-                  padding: '12px 16px',
+                  gap: 12,
+                  padding: '10px 14px',
                   background: 'var(--surface)',
                   border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-md)',
+                  borderRadius: 'var(--radius-sm)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
-                <AppIcon pkgName={pkg.name} size="md" installed={true} />
+                <AppIcon pkgName={pkg.name} size="sm" installed={true} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-primary)' }}>{displayName}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                     {pkg.name} · v{pkg.version}
                   </div>
                 </div>
@@ -148,7 +172,7 @@ function UpdatesTab({
     return (
       <div className="empty-state">
         <div className="empty-icon">✨</div>
-        <div className="empty-title">All Software Up to Date</div>
+        <div className="empty-title">You're up to date</div>
         <div className="empty-desc">No AUR package updates are currently available.</div>
       </div>
     );
@@ -158,22 +182,22 @@ function UpdatesTab({
 
   return (
     <div>
-      <div className="section-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div className="section-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div>
           <div className="section-title">Available Updates</div>
           <div className="section-count">{updates.length} updates available</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="btn btn-ghost btn-sm" onClick={selectAll} disabled={batchActive}>
             {selected.size === updates.length ? 'Deselect All' : 'Select All'}
           </button>
 
           <button
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             onClick={() => onUpdateBatch([...selected])}
             disabled={batchActive || selectedCount === 0}
-            style={{ gap: 8, padding: '8px 16px', fontSize: 13 }}
+            style={{ gap: 6, padding: '6px 14px' }}
           >
             {batchActive ? (
               <>
@@ -181,15 +205,13 @@ function UpdatesTab({
                 <span>Updating ({batchIndex + 1}/{batchList.length})…</span>
               </>
             ) : (
-              <>
-                <span>Update Selected ({selectedCount})</span>
-              </>
+              <span>Update Selected ({selectedCount})</span>
             )}
           </button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {updates.map(u => {
           const status = pkgStatusMap[u.name] || 'idle';
           const isChecked = selected.has(u.name);
@@ -201,11 +223,11 @@ function UpdatesTab({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 14,
-                padding: '12px 16px',
+                gap: 12,
+                padding: '10px 14px',
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
+                borderRadius: 'var(--radius-sm)',
               }}
             >
               <input
@@ -213,29 +235,29 @@ function UpdatesTab({
                 checked={isChecked}
                 onChange={() => toggleSelect(u.name)}
                 disabled={batchActive}
-                style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                style={{ width: 15, height: 15, accentColor: 'var(--accent)', cursor: 'pointer' }}
               />
 
-              <AppIcon pkgName={u.name} size="md" />
+              <AppIcon pkgName={u.name} size="sm" />
 
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text-primary)' }}>{displayName}</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  {u.name}: {u.current} → <span style={{ color: 'var(--success)', fontWeight: 600 }}>{u.latest}</span>
+                  {u.name}: <span style={{ color: 'var(--text-muted)' }}>{u.current}</span> → <span style={{ color: 'var(--success)', fontWeight: 600 }}>{u.latest}</span>
                 </div>
               </div>
 
               {/* Status Indicator */}
               {status === 'updating' ? (
-                <span className="chip chip-indigo" style={{ padding: '5px 10px', gap: 6 }}>
+                <span className="chip chip-indigo" style={{ padding: '4px 8px', gap: 5 }}>
                   <div className="spinner-apple" /> Building…
                 </span>
               ) : status === 'done' ? (
-                <span className="chip chip-green" style={{ padding: '5px 10px' }}>✓ Updated</span>
+                <span className="chip chip-green" style={{ padding: '4px 8px' }}>✓ Updated</span>
               ) : status === 'failed' ? (
-                <span className="chip chip-red" style={{ padding: '5px 10px' }}>✕ Failed</span>
+                <span className="chip chip-red" style={{ padding: '4px 8px' }}>✕ Failed</span>
               ) : status === 'waiting' ? (
-                <span className="chip chip-gray" style={{ padding: '5px 10px' }}>⏳ Queued</span>
+                <span className="chip chip-gray" style={{ padding: '4px 8px' }}>⏳ Queued</span>
               ) : (
                 <button
                   className="btn btn-ghost btn-sm"
@@ -341,7 +363,7 @@ function MainApp() {
       const res = await searchPackages(query, sortBy).catch(() => []);
       setResults(res.slice(0, 60));
       setLoading(false);
-    }, 300);
+    }, 280);
     return () => clearTimeout(searchTimer.current);
   }, [query, sortBy]);
 
@@ -441,6 +463,7 @@ function MainApp() {
 
   const isSearching = query.trim().length > 0;
   const currentCategory = CATEGORIES.find(c => c.id === view);
+  const showSortSelector = isSearching || Boolean(currentCategory);
 
   return (
     <div className="app-shell">
@@ -452,7 +475,7 @@ function MainApp() {
       />
 
       <div className="main">
-        {/* Header */}
+        {/* Header with Adaptive Controls */}
         <div className="header">
           <div className="search-wrapper">
             <span className="search-icon">⌕</span>
@@ -468,15 +491,17 @@ function MainApp() {
           </div>
 
           <div className="header-actions">
-            <select className="sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-              <option value="name-desc">Relevance</option>
-              <option value="popularity">Popularity</option>
-              <option value="votes">Votes</option>
-              <option value="lastmodified">Recently Updated</option>
-            </select>
+            {showSortSelector && (
+              <select className="sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                <option value="name-desc">Relevance</option>
+                <option value="popularity">Popularity</option>
+                <option value="votes">Votes</option>
+                <option value="lastmodified">Recently Updated</option>
+              </select>
+            )}
             <button
               className="header-btn"
-              title="Refresh repository"
+              title="Refresh package data"
               onClick={() => { refreshPackages(); addToast('Refreshed package lists', 'info'); }}
             >
               ↺
@@ -484,7 +509,7 @@ function MainApp() {
           </div>
         </div>
 
-        {/* Top Progress Bar (macOS / Steam style) */}
+        {/* Top Progress Bar */}
         <TopProgressBar
           active={isProcessing}
           pkgName={activePkg}
@@ -497,7 +522,7 @@ function MainApp() {
         />
 
         {/* Content Viewport */}
-        <div className="content" style={{ paddingBottom: termOpen ? 240 : 28 }}>
+        <div className="content" style={{ paddingBottom: termOpen ? 230 : 26 }}>
 
           {/* Search Results Mode */}
           {isSearching && (
@@ -510,11 +535,13 @@ function MainApp() {
                 {loading && <div className="spinner-apple" />}
               </div>
 
-              {results.length === 0 && !loading ? (
+              {loading ? (
+                <SkeletonGrid count={6} />
+              ) : results.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">🔍</div>
-                  <div className="empty-title">No Packages Found</div>
-                  <div className="empty-desc">Try checking the package spelling or searching for a broader term.</div>
+                  <div className="empty-title">No packages found</div>
+                  <div className="empty-desc">Try a different search term or check the package spelling.</div>
                 </div>
               ) : (
                 <div className="app-grid">
@@ -540,7 +567,7 @@ function MainApp() {
               <div className="search-hero">
                 <h1 className="search-hero-title">Discover Software</h1>
                 <p className="search-hero-subtitle">
-                  Browse, search, and manage community packages from the Arch User Repository.
+                  Find software for your Arch system from the Arch User Repository.
                 </p>
               </div>
 
@@ -550,18 +577,22 @@ function MainApp() {
                   <div className="section-title">Popular on AUR</div>
                   <div className="section-count">Community favorites</div>
                 </div>
-                <div className="app-grid">
-                  {popularPkgs.map((pkg, i) => (
-                    <AppCard
-                      key={pkg.Name}
-                      pkg={pkg}
-                      index={i}
-                      installed={installed}
-                      onSelect={setSelectedPkg}
-                      onQuickInstall={handleQuickInstall}
-                    />
-                  ))}
-                </div>
+                {popularPkgs.length === 0 ? (
+                  <SkeletonGrid count={4} />
+                ) : (
+                  <div className="app-grid">
+                    {popularPkgs.map((pkg, i) => (
+                      <AppCard
+                        key={pkg.Name}
+                        pkg={pkg}
+                        index={i}
+                        installed={installed}
+                        onSelect={setSelectedPkg}
+                        onQuickInstall={handleQuickInstall}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Essential Tools Rail */}
@@ -570,18 +601,22 @@ function MainApp() {
                   <div className="section-title">System & CLI Essentials</div>
                   <div className="section-count">Utilities for Arch Linux</div>
                 </div>
-                <div className="app-grid">
-                  {essentialPkgs.map((pkg, i) => (
-                    <AppCard
-                      key={pkg.Name}
-                      pkg={pkg}
-                      index={i}
-                      installed={installed}
-                      onSelect={setSelectedPkg}
-                      onQuickInstall={handleQuickInstall}
-                    />
-                  ))}
-                </div>
+                {essentialPkgs.length === 0 ? (
+                  <SkeletonGrid count={4} />
+                ) : (
+                  <div className="app-grid">
+                    {essentialPkgs.map((pkg, i) => (
+                      <AppCard
+                        key={pkg.Name}
+                        pkg={pkg}
+                        index={i}
+                        installed={installed}
+                        onSelect={setSelectedPkg}
+                        onQuickInstall={handleQuickInstall}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -589,11 +624,11 @@ function MainApp() {
           {/* Category View */}
           {!isSearching && currentCategory && (
             <div>
-              <div className="category-banner" style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 32 }}>{currentCategory.icon}</div>
+              <div className="category-banner" style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 28 }}>{currentCategory.icon}</div>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{currentCategory.title}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{currentCategory.subtitle}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>{currentCategory.title}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>{currentCategory.subtitle}</div>
                 </div>
               </div>
 
@@ -603,7 +638,12 @@ function MainApp() {
               </div>
 
               {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner-apple" /></div>
+                <SkeletonGrid count={4} />
+              ) : categoryPkgs.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-title">Can't find what you're looking for?</div>
+                  <div className="empty-desc">Search the AUR for more packages in this category.</div>
+                </div>
               ) : (
                 <div className="app-grid">
                   {categoryPkgs.map((pkg, i) => (
