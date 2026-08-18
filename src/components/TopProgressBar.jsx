@@ -75,7 +75,6 @@ export default function TopProgressBar({
 
   if (!active) return null;
 
-  const icon = getPackageIcon(pkgName || '');
   const isBatch = batchTotal > 1;
 
   return (
@@ -98,8 +97,8 @@ export default function TopProgressBar({
             </div>
             <div className="top-progress-phase">
               <span className="top-progress-pulse-dot" />
-              {parsedStatus.phase}
-              {parsedStatus.downloaded && ` (${parsedStatus.downloaded})`}
+              <span>{parsedStatus.phase}</span>
+              {parsedStatus.downloaded && <span>({parsedStatus.downloaded})</span>}
             </div>
           </div>
         </div>
@@ -120,13 +119,14 @@ export default function TopProgressBar({
           )}
 
           <button
-            className={`btn-terminal-toggle ${terminalOpen ? 'active' : ''}`}
+            className={`btn btn-ghost btn-sm ${terminalOpen ? 'active' : ''}`}
             onClick={onToggleTerminal}
             title="Toggle build terminal output"
+            style={{ padding: '3px 8px', fontSize: 11, gap: 4 }}
           >
-            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>$_</span>
+            <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}>$_</span>
             <span>Logs</span>
-            <span style={{ fontSize: 9 }}>{terminalOpen ? '▲' : '▼'}</span>
+            <span style={{ fontSize: 8 }}>{terminalOpen ? '▲' : '▼'}</span>
           </button>
         </div>
       </div>
