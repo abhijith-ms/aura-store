@@ -62,6 +62,63 @@ export const getAppDisplayName = (pkgName) => {
   return pkgName;
 };
 
+// Known Desktop GUI applications that have valid XDG .desktop launchers
+const KNOWN_GUI_APPS = new Set([
+  'visual-studio-code-bin',
+  'spotify',
+  'zen-browser-bin',
+  'google-chrome',
+  'brave-bin',
+  'discord',
+  'telegram-desktop',
+  'obs-studio-git',
+  'steam',
+  'postman-bin',
+  'insomnia-bin',
+  'sublime-text-4',
+  'retroarch',
+  'prismlauncher-bin',
+  'stremio',
+  'tor-browser-bin',
+  'vivaldi',
+  'signal-desktop',
+  'slack-desktop',
+  'gimp',
+  'inkscape',
+  'blender',
+  'audacity',
+  'kodi',
+  'cursor-bin',
+  'antigravity-ide',
+  'kiro-ide',
+  'packettracer',
+  'vlc-git',
+]);
+
+const KNOWN_CLI_TOOLS = new Set([
+  'paru',
+  'yay',
+  'btop',
+  'fastfetch-git',
+  'neovim-git',
+  'alacritty-git',
+  'kitty-git',
+  'timeshift',
+  'litellm',
+]);
+
+export const isLaunchable = (pkgName) => {
+  if (!pkgName) return false;
+  const key = pkgName.toLowerCase().trim();
+  if (KNOWN_CLI_TOOLS.has(key)) return false;
+  if (KNOWN_GUI_APPS.has(key)) return true;
+  const baseKey = key.replace(/-(?:bin|git|desktop|electron|app|nightly|preview|stable|beta)$/, '');
+  if (KNOWN_GUI_APPS.has(baseKey)) return true;
+  if (key.endsWith('-desktop') || key.endsWith('-gui')) return true;
+  return false;
+};
+
+
 
 export const getMultiplePackageInfo = async (pkgList) => {
   if (!pkgList || pkgList.length === 0) return [];

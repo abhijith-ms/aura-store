@@ -61,17 +61,12 @@ export default function TopProgressBar({
       }
     }
 
-    // If compiling, give a nice indeterminate progress estimation
-    if (phase === 'Compiling & Building' && percent === 0) {
-      percent = 65;
-    } else if (phase === 'Creating package' && percent === 0) {
-      percent = 85;
-    } else if (phase === 'Finalizing install' && percent === 0) {
-      percent = 92;
-    }
-
+    // Do NOT fabricate fake percentages during compilation — keep it honest with indeterminate animation
     return { phase, speed, percent, downloaded };
+
   }, [active, logs]);
+
+
 
   if (!active) return null;
 

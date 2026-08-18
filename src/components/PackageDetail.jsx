@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { getPkgbuild, formatNumber, timeAgo, getAppDisplayName } from '../services/aurApi';
+import { getPkgbuild, formatNumber, timeAgo, getAppDisplayName, isLaunchable, openDownloadsFolder } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
 import AppIcon from './AppIcon';
 
@@ -10,6 +10,7 @@ export default function PackageDetail({
   installLogs = [],
   onBack,
   onInstallStart,
+  onLaunch,
   onSelectDependency,
   onToggleTerminal,
   addToast,
@@ -23,24 +24,37 @@ export default function PackageDetail({
   const isInstalled = installed.has(pkg.Name);
   const displayName = getAppDisplayName(pkg.Name);
   const brandColor = getPackageBrandColor(pkg.Name);
+  const canLaunch = isLaunchable(pkg.Name);
 
-  // Parse active install stage
-  const installStage = useMemo(() => {
-    if (!isInstalling || !installLogs || installLogs.length === 0) return 0;
-    let stage = 1; // 1: Resolving, 2: Fetching, 3: Building, 4: Installing, 5: Done
-    const recent = installLogs.slice(-20);
+  // Parse active install stage & diagnostics from real process logs
+  const { stage, isManualSourceRequired, missingFilename } = useMemo(() => {
+    if (!installLogs || installLogs.length === 0) {
+      return { stage: 0, isManualSourceRequired: false, missingFilename: '' };
+    }
+
+    let st = 1; // 1: Resolving, 2: Fetching, 3: Building, 4: Installing
+    let manualReq = false;
+    let missingFile = '';
+
+    const recent = installLogs.slice(-30);
     for (const log of recent) {
       const text = log.text || '';
       if (text.includes('Downloading') || text.includes('Retrieving sources') || text.includes('curl')) {
-        stage = Math.max(stage, 2);
+        st = Math.max(st, 2);
       } else if (text.includes('Making package') || text.includes('Compiling') || text.includes('gcc') || text.includes('cargo') || text.includes('ninja') || text.includes('Starting build')) {
-        stage = Math.max(stage, 3);
+        st = Math.max(st, 3);
       } else if (text.includes('Installing') || text.includes('pacman -U') || text.includes('authenticat')) {
-        stage = Math.max(stage, 4);
+        st = Math.max(st, 4);
+      }
+
+      if (text.includes('was not found in the build directory and is not a URL')) {
+        manualReq = true;
+        const m = text.match(/ERROR:\s*([^\s]+)\s*was not found/i);
+        if (m) missingFile = m[1];
       }
     }
-    return stage;
-  }, [isInstalling, installLogs]);
+    return { stage: st, isManualSourceRequired: manualReq, missingFilename: missingFile };
+  }, [installLogs]);
 
   const togglePkgbuild = async () => {
     if (!showPkgbuild && !pkgbuild) {
@@ -68,6 +82,11 @@ export default function PackageDetail({
 
   const handleRemove = () => {
     onInstallStart(pkg.Name, 'remove');
+  };
+
+  const handleOpenDownloads = async () => {
+    await openDownloadsFolder();
+    addToast('Opened ~/Downloads folder', 'info');
   };
 
   const deps = pkg.Depends || [];
@@ -128,7 +147,11 @@ export default function PackageDetail({
               </div>
             ) : isInstalled ? (
               <>
-                <button className="btn btn-installed btn-lg" disabled>✓ Installed</button>
+                {canLaunch && (
+                  <button className="btn btn-primary btn-lg" onClick={() => onLaunch(pkg.Name, displayName)}>
+                    Open {displayName}
+                  </button>
+                )}
                 <button className="btn btn-danger btn-lg" onClick={handleRemove}>
                   🗑 Remove
                 </button>
@@ -144,25 +167,46 @@ export default function PackageDetail({
         {/* Live Build Stepper */}
         {isInstalling && (
           <div className="build-tracker">
-            <div className={`build-step ${installStage >= 1 ? (installStage === 1 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{installStage > 1 ? '✓' : '●'}</span>
+            <div className={`build-step ${stage >= 1 ? (stage === 1 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{stage > 1 ? '✓' : '●'}</span>
               <span>Resolving package dependencies</span>
             </div>
-            <div className={`build-step ${installStage >= 2 ? (installStage === 2 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{installStage > 2 ? '✓' : installStage === 2 ? '●' : '○'}</span>
+            <div className={`build-step ${stage >= 2 ? (stage === 2 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{stage > 2 ? '✓' : stage === 2 ? '●' : '○'}</span>
               <span>Retrieving source archives & signatures</span>
             </div>
-            <div className={`build-step ${installStage >= 3 ? (installStage === 3 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{installStage > 3 ? '✓' : installStage === 3 ? '●' : '○'}</span>
+            <div className={`build-step ${stage >= 3 ? (stage === 3 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{stage > 3 ? '✓' : stage === 3 ? '●' : '○'}</span>
               <span>Compiling & building via makepkg</span>
             </div>
-            <div className={`build-step ${installStage >= 4 ? (installStage === 4 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{installStage > 4 ? '✓' : installStage === 4 ? '●' : '○'}</span>
+            <div className={`build-step ${stage >= 4 ? (stage === 4 ? 'active' : 'completed') : ''}`}>
+              <span className="build-step-bullet">{stage > 4 ? '✓' : stage === 4 ? '●' : '○'}</span>
               <span>Finalizing installation via pacman</span>
             </div>
           </div>
         )}
       </div>
+
+      {/* Manual Download Helper Card if vendor requires user login */}
+      {!isInstalling && isManualSourceRequired && (
+        <div className="detail-section" style={{ borderColor: 'var(--warning)', background: 'var(--surface)' }}>
+          <div className="detail-section-title">
+            <span style={{ color: 'var(--warning)' }}>📥 Manual Download Source Required</span>
+            <span className="chip chip-orange">Proprietary EULA</span>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            This vendor restricts automatic downloads. Download <code style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{missingFilename || 'the source installer'}</code> into your <strong style={{ color: 'var(--text-primary)' }}>Downloads</strong> folder, and Aura will automatically detect and link it when you click Retry!
+          </p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button className="btn btn-ghost" onClick={handleOpenDownloads}>
+              Open Downloads Folder
+            </button>
+            <button className="btn btn-primary" onClick={() => onInstallStart(pkg.Name, 'install')}>
+              Retry Build
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Review Dialog */}
       {confirmingInstall && (

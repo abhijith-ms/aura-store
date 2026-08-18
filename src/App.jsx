@@ -8,19 +8,29 @@ import AppIcon from './components/AppIcon';
 import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
-  streamInstall, launchApp, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
+  streamInstall, launchApp, isLaunchable, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
 } from './services/aurApi';
 
-// Top curated popular packages (exactly 4 items for a clean single row)
-const CURATED_POPULAR = [
+// Top curated candidates for Explore discovery (dynamically sorted by popularity/votes)
+const DISCOVERY_POPULAR_CANDIDATES = [
   'visual-studio-code-bin',
   'spotify',
   'zen-browser-bin',
   'google-chrome',
+  'brave-bin',
+  'discord',
+  'steam',
+  'obs-studio-git',
 ];
 
-// Essential CLI tools list (exactly 4 items)
-const CURATED_ESSENTIALS = ['paru', 'fastfetch-git', 'btop', 'alacritty-git'];
+const DISCOVERY_ESSENTIAL_CANDIDATES = [
+  'paru',
+  'fastfetch-git',
+  'btop',
+  'alacritty-git',
+  'timeshift',
+  'kitty-git',
+];
 
 // ---------- Toast Notifications ----------
 function ToastStack({ toasts }) {
@@ -111,6 +121,8 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filtered.map(pkg => {
             const displayName = getAppDisplayName(pkg.name);
+            const canLaunch = isLaunchable(pkg.name);
+
             return (
               <div
                 key={pkg.name}
@@ -138,13 +150,15 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
                 </div>
 
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => onLaunch(pkg.name, displayName)}
-                    title={`Launch ${displayName}`}
-                  >
-                    Open
-                  </button>
+                  {canLaunch && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => onLaunch(pkg.name, displayName)}
+                      title={`Launch ${displayName}`}
+                    >
+                      Open
+                    </button>
+                  )}
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={() => onSelect({ Name: pkg.name, Version: pkg.version, Description: 'Locally installed AUR package' })}
@@ -358,11 +372,17 @@ function MainApp() {
     getUpdates().then(({ updates: u }) => setUpdates(u || [])).catch(() => {});
   }, []);
 
-  // Load initial packages
+  // Load initial packages dynamically sorted
   useEffect(() => {
     refreshPackages();
-    getMultiplePackageInfo(CURATED_POPULAR).then(setPopularPkgs);
-    getMultiplePackageInfo(CURATED_ESSENTIALS).then(setEssentialPkgs);
+    getMultiplePackageInfo(DISCOVERY_POPULAR_CANDIDATES).then(pkgs => {
+      const sorted = [...pkgs].sort((a, b) => (b.NumVotes || 0) - (a.NumVotes || 0));
+      setPopularPkgs(sorted.slice(0, 4));
+    });
+    getMultiplePackageInfo(DISCOVERY_ESSENTIAL_CANDIDATES).then(pkgs => {
+      const sorted = [...pkgs].sort((a, b) => (b.NumVotes || 0) - (a.NumVotes || 0));
+      setEssentialPkgs(sorted.slice(0, 4));
+    });
   }, [refreshPackages]);
 
   // Global Keyboard Shortcuts (Ctrl+K and Escape)
@@ -590,6 +610,7 @@ function MainApp() {
               installLogs={termLogs}
               onBack={() => setSelectedPkg(null)}
               onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
+              onLaunch={handleLaunchApp}
               onSelectDependency={handleDependencyClick}
               onToggleTerminal={() => setTermOpen(o => !o)}
               addToast={addToast}
@@ -639,11 +660,11 @@ function MainApp() {
                 </p>
               </div>
 
-              {/* Popular on AUR Rail (Clean single row of 4 items) */}
+              {/* Popular on AUR Rail (Curated top 4) */}
               <div>
                 <div className="section-header">
                   <div className="section-title">Popular on AUR</div>
-                  <div className="section-count">4 packages</div>
+                  <div className="section-count">{popularPkgs.length} packages</div>
                 </div>
                 {popularPkgs.length === 0 ? (
                   <SkeletonGrid count={4} popular={true} />
@@ -663,11 +684,11 @@ function MainApp() {
                 )}
               </div>
 
-              {/* Essential Tools Rail (Clean single row of 4 items) */}
+              {/* Essential Tools Rail (Curated top 4) */}
               <div>
                 <div className="section-header">
                   <div className="section-title">System & CLI Essentials</div>
-                  <div className="section-count">4 utilities</div>
+                  <div className="section-count">{essentialPkgs.length} utilities</div>
                 </div>
                 {essentialPkgs.length === 0 ? (
                   <SkeletonGrid count={4} />
@@ -746,7 +767,6 @@ function MainApp() {
               pkgStatusMap={pkgStatusMap}
             />
           ) : null}
-
 
         </div>
       </div>
