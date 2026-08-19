@@ -1,10 +1,12 @@
 /**
- * rankPackages.js — Deterministic relevance ranking for Aura search.
+ * rankPackages.js — Deterministic relevance and identity ranking for Aura search.
  *
  * Architecture:
- *   1. Compute a PRIMARY relevance score (identity/name/description signals)
- *   2. Compute SECONDARY tie-break signals (popularity, votes)
- *   3. Sort lexicographically: [primaryScore DESC, popularity DESC, votes DESC]
+ *   1. Resolve Application Identity & Intent from query (applicationIdentity.js)
+ *   2. Classify candidate packages into package family roles (classifyPackage.js)
+ *   3. Compute PRIMARY relevance score (Identity > Exact Name > Prefix > Tokens > Description)
+ *   4. Compute SECONDARY tie-break signals (popularity, votes)
+ *   5. Sort lexicographically: [primaryScore DESC, popularity DESC, votes DESC]
  *
  *   Primary relevance ALWAYS wins over popularity/votes.
  *   Popularity/votes ONLY break ties within the same primary relevance tier.
@@ -16,26 +18,33 @@
  */
 
 import { normalizeQuery } from './normalizeQuery.js';
+import { resolveQueryIdentity } from './applicationIdentity.js';
+import { classifyPackage } from './classifyPackage.js';
 
 // Variant suffixes that receive a penalty when the query doesn't explicitly request them
 const VARIANT_SUFFIXES = ['-git', '-bin', '-debug', '-nightly', '-beta', '-devel', '-dev', '-svn', '-hg', '-bzr', '-cvs'];
 
 // Variant keywords that, when present in the query, REMOVE the penalty for matching variants
-const VARIANT_KEYWORDS = ['git', 'bin', 'debug', 'nightly', 'beta', 'devel', 'dev', 'svn', 'hg', 'bzr', 'cvs'];
+const VARIANT_KEYWORDS = ['git', 'bin', 'debug', 'nightly', 'beta', 'devel', 'dev', 'svn', 'hg', 'bzr', 'cvs', 'insiders', 'canary', 'ptb', 'esr'];
 
 /**
- * Score a single package against a normalized query.
+ * Score a single package against a normalized query and resolved identity.
  *
  * @param {object} pkg - AUR package object (Name, Description, NumVotes, Popularity, etc.)
  * @param {{ rawQuery: string, normalizedQuery: string, tokens: string[] }} query
+ * @param {object} queryIdentity - Resolved identity from resolveQueryIdentity
  * @param {{ installedPackages: Set<string>, knownDisplayNames: object }} context
  * @returns {{ primaryScore: number, popularity: number, votes: number, matchReason: string }}
  */
-function scorePackage(pkg, query, context) {
+function scorePackage(pkg, query, queryIdentity, context) {
   const { normalizedQuery, tokens } = query;
+  const { identity, variantTerms } = queryIdentity;
   const pkgName = (pkg.Name || '').toLowerCase();
   const pkgNameNormalized = pkgName.replace(/[-_]/g, ' ');
   const description = (pkg.Description || '').toLowerCase();
+
+  // Classify package family role relative to resolved identity
+  const familyRole = classifyPackage(pkg, identity, variantTerms);
 
   // Look up known display name
   const displayName = context.knownDisplayNames?.[pkgName] || '';
@@ -45,22 +54,46 @@ function scorePackage(pkg, query, context) {
   let primaryScore = 0;
   let matchReason = 'none';
 
-  // --- TIER 1: Exact identity matches (+100–120) ---
+  // --- TIER 0: Canonical Application Identity & Explicit Aliases (+160–220) ---
+  if (identity && !queryIdentity.isAmbiguous) {
+    if (familyRole === 'canonical') {
+      // Top canonical package for this application (e.g. google-chrome, visual-studio-code-bin)
+      primaryScore = 200;
+      matchReason = identity.aliases.includes(normalizedQuery) ? 'explicit_alias' : 'exact_canonical_identity';
+    } else if (familyRole === 'official_variant') {
+      // Check if this variant was explicitly requested in the query (e.g. "firefox nightly")
+      const variantRequested = variantTerms.some(vt => pkgName.includes(vt));
+      if (variantRequested) {
+        primaryScore = 220; // Explicitly requested variant ranks above even the base canonical package!
+        matchReason = 'official_variant+requested';
+      } else {
+        primaryScore = 160;
+        matchReason = 'official_variant';
+      }
+    } else if (familyRole === 'related') {
+      // Related tools/extensions/servers for this identity (e.g. vscode-langservers-extracted, chrome-devtools)
+      // Placed in lower tier so they never outrank the canonical package or its official variants
+      primaryScore = 40;
+      matchReason = 'related_package';
+    }
+  }
+
+  // --- TIER 1: Exact identity & Name matches (+95–120) ---
 
   // Exact application/display name match
-  if (displayNameNormalized && (displayNameNormalized === normalizedQuery || displayNameLower === normalizedQuery)) {
+  if (primaryScore < 120 && displayNameNormalized && (displayNameNormalized === normalizedQuery || displayNameLower === normalizedQuery)) {
     primaryScore = Math.max(primaryScore, 120);
-    matchReason = 'exact_application_name';
+    if (matchReason === 'none') matchReason = 'exact_application_name';
   }
 
   // Exact package name match
-  if (pkgName === normalizedQuery || pkgName === query.rawQuery.toLowerCase()) {
+  if (primaryScore < 100 && (pkgName === normalizedQuery || pkgName === query.rawQuery.toLowerCase())) {
     primaryScore = Math.max(primaryScore, 100);
     if (matchReason === 'none') matchReason = 'exact_package_name';
   }
 
   // Exact normalized package name match (e.g. "visual studio code" matches "visual-studio-code-bin")
-  if (pkgNameNormalized === normalizedQuery) {
+  if (primaryScore < 95 && pkgNameNormalized === normalizedQuery) {
     primaryScore = Math.max(primaryScore, 95);
     if (matchReason === 'none') matchReason = 'exact_package_name_normalized';
   }
@@ -70,7 +103,7 @@ function scorePackage(pkg, query, context) {
   // Name starts with query
   if (primaryScore < 80 && (pkgName.startsWith(normalizedQuery) || pkgNameNormalized.startsWith(normalizedQuery))) {
     primaryScore = Math.max(primaryScore, 80);
-    if (matchReason === 'none' || matchReason === 'none') matchReason = 'prefix_match';
+    if (matchReason === 'none') matchReason = 'prefix_match';
   }
 
   // Display name starts with query
@@ -137,21 +170,19 @@ function scorePackage(pkg, query, context) {
   }
 
   // --- VARIANT PENALTIES (query-token-aware) ---
-  // Check if query explicitly requests a variant
   const queryRequestsVariant = VARIANT_KEYWORDS.some(vk => tokens.includes(vk));
 
-  if (!queryRequestsVariant) {
+  if (!queryRequestsVariant && familyRole !== 'canonical') {
     // Apply small penalty for variant suffixes when the query is generic
     for (const suffix of VARIANT_SUFFIXES) {
       if (pkgName.endsWith(suffix)) {
-        // -bin gets a smaller penalty since it's very common and often canonical
         const penalty = suffix === '-bin' ? 5 : 15;
         primaryScore -= penalty;
         break;
       }
     }
-  } else {
-    // Query explicitly requests a variant — BOOST matching variants
+  } else if (queryRequestsVariant && familyRole !== 'official_variant') {
+    // Query explicitly requests a variant — BOOST matching package suffixes
     for (const vk of VARIANT_KEYWORDS) {
       if (tokens.includes(vk) && pkgName.endsWith(`-${vk}`)) {
         primaryScore += 20;
@@ -169,7 +200,7 @@ function scorePackage(pkg, query, context) {
 
   // --- SECONDARY TIE-BREAK SIGNALS ---
   // Scaled 0–15 for both popularity and votes
-  const maxPop = 100; // AUR popularity scale
+  const maxPop = 100;
   const maxVotes = 5000;
   const popularity = Math.min(15, Math.round(((pkg.Popularity || 0) / maxPop) * 15));
   const votes = Math.min(15, Math.round(((pkg.NumVotes || 0) / maxVotes) * 15));
@@ -178,7 +209,7 @@ function scorePackage(pkg, query, context) {
 }
 
 /**
- * Rank a list of AUR packages against a query.
+ * Rank a list of AUR packages against a query with application identity awareness.
  *
  * @param {object[]} packages - Array of AUR package objects
  * @param {string} rawQuery - The user's typed query string
@@ -192,8 +223,11 @@ export function rankPackages(packages, rawQuery, context = {}) {
     return [];
   }
 
+  // Resolve application identity and intent from query
+  const queryIdentity = resolveQueryIdentity(query);
+
   const scored = packages.map(pkg => {
-    const score = scorePackage(pkg, query, context);
+    const score = scorePackage(pkg, query, queryIdentity, context);
     return { package: pkg, ...score };
   });
 
