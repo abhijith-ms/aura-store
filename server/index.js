@@ -18,7 +18,48 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// Helper to auto-link manual download sources from ~/Downloads into ~/.cache/paru/clone/<pkg>/
+// --- System Desktop Entry Indexer ---
+function getSystemDesktopEntries() {
+  const dirs = [
+    '/usr/share/applications',
+    path.join(os.homedir(), '.local/share/applications'),
+    '/var/lib/flatpak/exports/share/applications',
+  ];
+
+  const entries = new Map(); // key -> { filename, name, exec, isGui }
+
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const files = fs.readdirSync(dir);
+      for (const f of files) {
+        if (!f.endsWith('.desktop')) continue;
+        const filePath = path.join(dir, f);
+        try {
+          const content = fs.readFileSync(filePath, 'utf8');
+          const isTerminal = /Terminal\s*=\s*true/i.test(content);
+          const isNoDisplay = /NoDisplay\s*=\s*true/i.test(content);
+          const isGui = !isTerminal && !isNoDisplay;
+
+          const nameMatch = content.match(/^Name\s*=\s*(.+)$/m);
+          const execMatch = content.match(/^Exec\s*=\s*(.+)$/m);
+
+          const baseKey = f.replace(/\.desktop$/, '').toLowerCase();
+          entries.set(baseKey, {
+            filename: f,
+            name: nameMatch ? nameMatch[1].trim() : baseKey,
+            exec: execMatch ? execMatch[1].trim().split(' ')[0] : baseKey,
+            isGui,
+          });
+        } catch {}
+      }
+    } catch {}
+  }
+
+  return entries;
+}
+
+// --- Helper to auto-link manual download sources from ~/Downloads into ~/.cache/paru/clone/<pkg>/ ---
 function autoLinkDownloadSources(pkg, requiredFile = null) {
   const downloadsDir = path.join(os.homedir(), 'Downloads');
   const cloneDir = path.join(os.homedir(), '.cache', 'paru', 'clone', pkg);
@@ -52,7 +93,6 @@ function autoLinkDownloadSources(pkg, requiredFile = null) {
   }
 }
 
-
 // --- AUR RPC v5 Proxy ---
 app.get('/api/search', async (req, res) => {
   const { q, by = 'name-desc' } = req.query;
@@ -80,15 +120,29 @@ app.get('/api/info', async (req, res) => {
   }
 });
 
-// --- Installed packages ---
+// --- Installed packages with real system Desktop Entry verification ---
 app.get('/api/installed', async (req, res) => {
   try {
+    const desktopEntries = getSystemDesktopEntries();
+
     const { stdout: aurPkgs } = await execAsync('pacman -Qm 2>/dev/null').catch(() => ({ stdout: '' }));
     const { stdout: allPkgs } = await execAsync('pacman -Q 2>/dev/null').catch(() => ({ stdout: '' }));
+
     const aur = aurPkgs.trim().split('\n').filter(Boolean).map(l => {
       const [name, version] = l.split(' ');
-      return { name, version, source: 'aur' };
+      const cleanKey = name.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
+      const desktop = desktopEntries.get(cleanKey) || desktopEntries.get(name.toLowerCase());
+      const isLaunchable = Boolean(desktop && desktop.isGui);
+
+      return {
+        name,
+        version,
+        source: 'aur',
+        isLaunchable,
+        desktopFile: desktop?.filename || null,
+      };
     });
+
     const allSet = new Set(allPkgs.trim().split('\n').filter(Boolean).map(l => l.split(' ')[0]));
     res.json({ aur, allInstalled: [...allSet] });
   } catch (e) {
@@ -151,7 +205,8 @@ app.get('/api/install', (req, res) => {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  activeInstalls.set(pkg, child);
+  activeInstalls.set(pkg, { child, send });
+
   child.stdout.on('data', d => {
     const text = d.toString();
     send('log', text);
@@ -162,6 +217,7 @@ app.get('/api/install', (req, res) => {
       }
     }
   });
+
   child.stderr.on('data', d => {
     const text = d.toString();
     send('log', text);
@@ -172,21 +228,40 @@ app.get('/api/install', (req, res) => {
       }
     }
   });
+
   child.on('close', code => {
     activeInstalls.delete(pkg);
     send('done', code === 0 ? 'success' : 'error');
     res.end();
   });
+
   child.on('error', err => {
     send('error', err.message);
     res.end();
   });
+
   req.on('close', () => {
     if (activeInstalls.has(pkg)) {
-      activeInstalls.get(pkg).kill();
+      activeInstalls.get(pkg).child.kill();
       activeInstalls.delete(pkg);
     }
   });
+});
+
+// --- Cancel active install ---
+app.post('/api/cancel', (req, res) => {
+  const { pkg } = req.body;
+  if (pkg && activeInstalls.has(pkg)) {
+    const session = activeInstalls.get(pkg);
+    try {
+      session.child.kill('SIGTERM');
+      session.send('log', 'Installation cancelled by user.');
+      session.send('done', 'cancelled');
+    } catch {}
+    activeInstalls.delete(pkg);
+    return res.json({ ok: true, cancelled: pkg });
+  }
+  res.json({ ok: false, error: 'No active installation found' });
 });
 
 // --- Open Downloads Folder ---
@@ -197,42 +272,29 @@ app.post('/api/open-downloads', (req, res) => {
   res.json({ ok: true });
 });
 
-
 // --- Launch installed app ---
 app.post('/api/launch', (req, res) => {
   const { pkg } = req.body;
   if (!pkg) return res.status(400).json({ error: 'pkg required' });
 
-  // Map known package names to executable/desktop commands if needed
-  const binMap = {
-    'visual-studio-code-bin': 'code',
-    'zen-browser-bin': 'zen-browser',
-    'brave-bin': 'brave',
-    'google-chrome': 'google-chrome-stable',
-    'spotify': 'spotify',
-    'discord': 'discord',
-    'telegram-desktop': 'telegram-desktop',
-    'obs-studio-git': 'obs',
-    'steam': 'steam',
-    'postman-bin': 'postman',
-    'sublime-text-4': 'subl',
-  };
+  const desktopEntries = getSystemDesktopEntries();
+  const cleanKey = pkg.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
+  const desktop = desktopEntries.get(cleanKey) || desktopEntries.get(pkg.toLowerCase());
 
-  const target = binMap[pkg] || pkg.replace(/-(?:bin|git)$/, '');
+  let target = desktop ? desktop.filename : pkg.replace(/-(?:bin|git)$/, '');
+
   const child = spawn('gtk-launch', [target], { detached: true, stdio: 'ignore' });
   child.unref();
 
   child.on('error', () => {
-    // Fallback: direct binary execution detached
     try {
-      const fallback = spawn(target, [], { detached: true, stdio: 'ignore' });
+      const fallback = spawn(target.replace(/\.desktop$/, ''), [], { detached: true, stdio: 'ignore' });
       fallback.unref();
     } catch {}
   });
 
   res.json({ ok: true, launched: target });
 });
-
 
 // --- PKGBUILD preview from AUR ---
 app.get('/api/pkgbuild', async (req, res) => {
@@ -251,4 +313,3 @@ app.get('/api/pkgbuild', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Aura Store backend running on http://localhost:${PORT}`);
 });
-

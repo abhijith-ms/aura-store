@@ -10,6 +10,7 @@ export default function PackageDetail({
   installLogs = [],
   onBack,
   onInstallStart,
+  onCancel,
   onLaunch,
   onSelectDependency,
   onToggleTerminal,
@@ -137,15 +138,24 @@ export default function PackageDetail({
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {isInstalling ? (
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span className="chip chip-indigo" style={{ padding: '6px 12px', fontSize: 12.5, gap: 6 }}>
                   <div className="spinner-apple" /> Building & Installing…
                 </span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={onCancel}
+                  style={{ color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.2)' }}
+                  title="Cancel this installation"
+                >
+                  ✕ Cancel
+                </button>
                 <button className="btn btn-ghost btn-sm" onClick={onToggleTerminal}>
-                  Show Terminal Logs
+                  Logs
                 </button>
               </div>
             ) : isInstalled ? (
+
               <>
                 {canLaunch && (
                   <button className="btn btn-primary btn-lg" onClick={() => onLaunch(pkg.Name, displayName)}>

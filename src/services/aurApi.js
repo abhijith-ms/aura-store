@@ -149,7 +149,21 @@ export const launchApp = async (pkg) => {
   }
 };
 
+export const cancelInstall = async (pkg) => {
+  try {
+    const res = await fetch(`${API}/api/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pkg }),
+    });
+    return res.json();
+  } catch {
+    return { ok: false };
+  }
+};
+
 export const openDownloadsFolder = async () => {
+
   try {
     const res = await fetch(`${API}/api/open-downloads`, { method: 'POST' });
     return res.json();

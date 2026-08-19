@@ -8,9 +8,11 @@ export default function TopProgressBar({
   batchTotal = 0,
   action = 'install',
   logs = [],
+  onCancel,
   onToggleTerminal,
   terminalOpen,
 }) {
+
   // Parse recent log lines to extract real speed, percent, and phase
   const parsedStatus = useMemo(() => {
     if (!active || !logs || logs.length === 0) {
@@ -114,6 +116,15 @@ export default function TopProgressBar({
           )}
 
           <button
+            className="btn btn-ghost btn-sm"
+            onClick={onCancel}
+            title="Cancel installation"
+            style={{ padding: '3px 8px', fontSize: 11, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.2)' }}
+          >
+            ✕ Cancel
+          </button>
+
+          <button
             className={`btn btn-ghost btn-sm ${terminalOpen ? 'active' : ''}`}
             onClick={onToggleTerminal}
             title="Toggle build terminal output"
@@ -125,6 +136,7 @@ export default function TopProgressBar({
           </button>
         </div>
       </div>
+
 
       {/* Animated Glowing Progress Line */}
       <div className="top-progress-track">

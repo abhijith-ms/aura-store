@@ -8,8 +8,9 @@ import AppIcon from './components/AppIcon';
 import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
-  streamInstall, launchApp, isLaunchable, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
+  streamInstall, launchApp, cancelInstall, isLaunchable, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
 } from './services/aurApi';
+
 
 // Top curated candidates for Explore discovery (dynamically sorted by popularity/votes)
 const DISCOVERY_POPULAR_CANDIDATES = [
@@ -121,7 +122,8 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filtered.map(pkg => {
             const displayName = getAppDisplayName(pkg.name);
-            const canLaunch = isLaunchable(pkg.name);
+            const canLaunch = pkg.isLaunchable ?? isLaunchable(pkg.name);
+
 
             return (
               <div
@@ -517,6 +519,18 @@ function MainApp() {
     await launchApp(pkgName);
   };
 
+  const handleCancelInstall = async () => {
+    if (!activePkg) return;
+    const pkg = activePkg;
+    addToast(`Cancelling installation for ${pkg}…`, 'info');
+    await cancelInstall(pkg);
+    setIsProcessing(false);
+    setBatchActive(false);
+    setActivePkg('');
+    addToast('Installation cancelled. No changes made.', 'info');
+    refreshPackages();
+  };
+
   const handleDependencyClick = async (depName) => {
     setLoading(true);
     const info = await getPackageInfo(depName);
@@ -594,6 +608,7 @@ function MainApp() {
           batchTotal={batchActive ? batchList.length : 0}
           action={activeAction}
           logs={termLogs}
+          onCancel={handleCancelInstall}
           onToggleTerminal={() => setTermOpen(o => !o)}
           terminalOpen={termOpen}
         />
@@ -610,12 +625,14 @@ function MainApp() {
               installLogs={termLogs}
               onBack={() => setSelectedPkg(null)}
               onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
+              onCancel={handleCancelInstall}
               onLaunch={handleLaunchApp}
               onSelectDependency={handleDependencyClick}
               onToggleTerminal={() => setTermOpen(o => !o)}
               addToast={addToast}
             />
           ) : isSearching ? (
+
             /* Search Results Mode */
             <div>
               <div className="section-header">
