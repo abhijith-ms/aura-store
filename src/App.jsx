@@ -135,7 +135,9 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{item.pkg}</span>
-                    {item.verified && <span className="chip chip-green" style={{ fontSize: 10, padding: '1px 5px' }}>✓ Verified</span>}
+                    {item.verification?.status === 'verified' && <span className="chip chip-green" style={{ fontSize: 10, padding: '1px 5px' }}>✓ Verified</span>}
+                    {item.verification?.status === 'not_verified' && <span className="chip chip-red" style={{ fontSize: 10, padding: '1px 5px' }}>✕ Not Verified</span>}
+                    {item.verification?.status === 'verification_failed' && <span className="chip chip-red" style={{ fontSize: 10, padding: '1px 5px' }}>⚠ Verification Failed</span>}
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
                     {item.action === 'remove' ? 'Removed package' : item.action === 'update' ? 'Updated package' : 'Installed package'} · {timeLabel}
@@ -178,6 +180,28 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
                       View Package ↗
                     </button>
                   </div>
+
+                  {item.verification && item.verification.status !== 'not_applicable' && (
+                    <div style={{
+                      padding: 8,
+                      background: item.verification.status === 'verified' ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                      border: `1px solid ${item.verification.status === 'verified' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                      borderRadius: 4,
+                      color: item.verification.status === 'verified' ? 'var(--success)' : 'var(--danger)',
+                      display: 'flex',
+                      gap: 12,
+                      alignItems: 'center',
+                      fontSize: 11.5,
+                    }}>
+                      <span style={{ fontWeight: 600 }}>
+                        {item.verification.status === 'verified' ? '✓ Verified' : item.verification.status === 'not_verified' ? '✕ Not Verified' : '⚠ Verification Failed'}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        method: {item.verification.method}
+                        {item.verification.installedVersion && ` · v${item.verification.installedVersion}`}
+                      </span>
+                    </div>
+                  )}
 
                   {item.error && (
                     <div style={{

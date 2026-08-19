@@ -104,7 +104,24 @@ function autoLinkDownloadSources(pkg, requiredFile = null) {
 
 // ============================================================================
 // 3. First-Class Operation Engine (State Machine, Concurrency & Lifecycle)
+//
+//    Concurrency Policy:
+//      System-mutating operations (install, update, remove) are mutually exclusive.
+//      Read-only operations (search, info, installed, pkgbuild) are always allowed.
+//
+//    Memory Limits:
+//      MAX_HISTORY_ENTRIES = 50
+//      MAX_LOG_LINES_PER_OP = 500
+//      MAX_LOG_BYTES_PER_OP = 65536 (64 KB)
+//
 // ============================================================================
+const LIMITS = {
+  MAX_HISTORY_ENTRIES: 50,
+  MAX_LOG_LINES: 500,
+  MAX_LOG_BYTES: 65536,
+  MAX_RECONNECT_REPLAY_LINES: 30,
+};
+
 class OperationEngine {
   constructor() {
     this.activeOperation = null; // currently running Operation object
@@ -128,13 +145,14 @@ class OperationEngine {
       if (!fs.existsSync(auraCache)) fs.mkdirSync(auraCache, { recursive: true });
       fs.writeFileSync(
         path.join(auraCache, 'operation_history.json'),
-        JSON.stringify(this.history.slice(0, 50), null, 2)
+        JSON.stringify(this.history.slice(0, LIMITS.MAX_HISTORY_ENTRIES), null, 2)
       );
     } catch {}
   }
 
   createOperation(pkg, action) {
-    // Concurrency Guard: Block concurrent operations
+    // Concurrency Guard: Block concurrent system-mutating operations.
+    // Read-only operations (search, info, etc.) are unaffected.
     if (this.activeOperation && ['resolving', 'downloading', 'building', 'installing'].includes(this.activeOperation.state)) {
       const err = new Error(`Operation already active for ${this.activeOperation.pkg}`);
       err.code = 'CONCURRENT_OPERATION_RUNNING';
@@ -147,6 +165,7 @@ class OperationEngine {
       id,
       pkg,
       action, // 'install' | 'remove' | 'update'
+      source: 'aura', // operation ownership: 'aura' | 'external'
       state: 'resolving',
       stage: 'resolving',
       startedAt: Date.now(),
@@ -155,10 +174,16 @@ class OperationEngine {
       pid: null,
       pgid: null,
       metrics: { speed: null, downloaded: null, percent: null },
-      logs: [], // ring buffer of recent logs
+      logs: [], // ring buffer of recent logs (enforced by LIMITS)
+      logBytes: 0,
       error: null,
       child: null,
-      verified: false,
+      verification: {
+        status: 'pending', // pending | verified | not_verified | verification_failed | not_applicable
+        method: null,
+        verifiedAt: null,
+        installedVersion: null,
+      },
     };
 
     this.activeOperation = op;
@@ -172,6 +197,7 @@ class OperationEngine {
       id: op.id,
       pkg: op.pkg,
       action: op.action,
+      source: op.source,
       state: op.state,
       stage: op.stage,
       startedAt: op.startedAt,
@@ -180,7 +206,7 @@ class OperationEngine {
       metrics: op.metrics,
       logs: op.logs.slice(-50),
       error: op.error,
-      verified: op.verified,
+      verification: op.verification,
     };
   }
 
@@ -231,8 +257,25 @@ class OperationEngine {
     const op = this.activeOperation?.id === opId ? this.activeOperation : null;
     if (!op) return;
 
+    const textBytes = Buffer.byteLength(text, 'utf8');
+
+    // Enforce max log bytes per operation (prevent memory growth on large builds)
+    if (op.logBytes + textBytes > LIMITS.MAX_LOG_BYTES) {
+      // Evict oldest logs until under budget
+      while (op.logs.length > 0 && op.logBytes + textBytes > LIMITS.MAX_LOG_BYTES) {
+        const evicted = op.logs.shift();
+        op.logBytes -= Buffer.byteLength(evicted.text, 'utf8');
+      }
+    }
+
+    // Enforce max log lines
+    while (op.logs.length >= LIMITS.MAX_LOG_LINES) {
+      const evicted = op.logs.shift();
+      op.logBytes -= Buffer.byteLength(evicted.text, 'utf8');
+    }
+
     op.logs.push({ text, type, ts: Date.now() });
-    if (op.logs.length > 300) op.logs.shift(); // 300-line ring buffer
+    op.logBytes += textBytes;
     this.broadcast(opId, 'log', text);
   }
 
@@ -253,41 +296,76 @@ class OperationEngine {
     op.completedAt = Date.now();
     op.error = error;
 
-    // Strict Verification Invariant (Rule 1: Verify actual package state)
+    // Strict Verification Invariant:
+    //   Install/Update: exit 0 AND pacman -Q finds package AND version matches
+    //   Remove:         exit 0 AND pacman -Q no longer finds package
+    //   Cancelled/Failed: not_applicable
     if (finalStatus === 'completed' && (op.action === 'install' || op.action === 'update')) {
       try {
         const { stdout } = await execAsync(`pacman -Q ${op.pkg} 2>/dev/null`);
-        op.verified = Boolean(stdout.trim());
+        const parts = stdout.trim().split(' ');
+        const installedVersion = parts[1] || null;
+        op.verification = {
+          status: installedVersion ? 'verified' : 'not_verified',
+          method: 'pacman-query',
+          verifiedAt: Date.now(),
+          installedVersion,
+        };
       } catch {
-        op.verified = false;
+        op.verification = {
+          status: 'verification_failed',
+          method: 'pacman-query',
+          verifiedAt: Date.now(),
+          installedVersion: null,
+        };
       }
     } else if (finalStatus === 'completed' && op.action === 'remove') {
       try {
         await execAsync(`pacman -Q ${op.pkg} 2>/dev/null`);
-        op.verified = false;
+        // Package still found after removal → not verified
+        op.verification = {
+          status: 'not_verified',
+          method: 'pacman-query-absent',
+          verifiedAt: Date.now(),
+          installedVersion: null,
+        };
       } catch {
-        op.verified = true;
+        // Package absent from system → verified removal
+        op.verification = {
+          status: 'verified',
+          method: 'pacman-query-absent',
+          verifiedAt: Date.now(),
+          installedVersion: null,
+        };
       }
+    } else {
+      op.verification = {
+        status: 'not_applicable',
+        method: null,
+        verifiedAt: null,
+        installedVersion: null,
+      };
     }
 
     this.broadcast(opId, 'done', {
       status: finalStatus,
       error,
-      verified: op.verified,
+      verification: op.verification,
     });
 
-    // Record in persistent history
+    // Record in persistent history (trimmed logs for space efficiency)
     this.history.unshift({
       id: op.id,
       pkg: op.pkg,
       action: op.action,
+      source: op.source,
       state: op.state,
       startedAt: op.startedAt,
       completedAt: op.completedAt,
       error: op.error,
-      verified: op.verified,
+      verification: op.verification,
     });
-    this.history = this.history.slice(0, 50);
+    this.history = this.history.slice(0, LIMITS.MAX_HISTORY_ENTRIES);
     this.persistHistory();
 
     this.activeOperation = null;
@@ -500,7 +578,7 @@ app.get('/api/install', async (req, res) => {
       }
     })}\n\n`);
 
-    for (const log of engine.activeOperation.logs.slice(-30)) {
+    for (const log of engine.activeOperation.logs.slice(-LIMITS.MAX_RECONNECT_REPLAY_LINES)) {
       res.write(`data: ${JSON.stringify({ opId, type: 'log', data: log.text })}\n\n`);
     }
     return;
