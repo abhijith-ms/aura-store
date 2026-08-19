@@ -18,7 +18,7 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// --- System Desktop Entry Indexer ---
+// --- System Desktop Entry Indexer (Supports Multiple Entries per Package) ---
 function getSystemDesktopEntries() {
   const dirs = [
     '/usr/share/applications',
@@ -26,7 +26,7 @@ function getSystemDesktopEntries() {
     '/var/lib/flatpak/exports/share/applications',
   ];
 
-  const entries = new Map(); // key -> { filename, name, exec, isGui }
+  const entriesMap = new Map(); // key -> Array<{ filename, name, exec, isGui }>
 
   for (const dir of dirs) {
     if (!fs.existsSync(dir)) continue;
@@ -45,18 +45,23 @@ function getSystemDesktopEntries() {
           const execMatch = content.match(/^Exec\s*=\s*(.+)$/m);
 
           const baseKey = f.replace(/\.desktop$/, '').toLowerCase();
-          entries.set(baseKey, {
+          const item = {
             filename: f,
             name: nameMatch ? nameMatch[1].trim() : baseKey,
             exec: execMatch ? execMatch[1].trim().split(' ')[0] : baseKey,
             isGui,
-          });
+          };
+
+          if (!entriesMap.has(baseKey)) {
+            entriesMap.set(baseKey, []);
+          }
+          entriesMap.get(baseKey).push(item);
         } catch {}
       }
     } catch {}
   }
 
-  return entries;
+  return entriesMap;
 }
 
 // --- Helper to auto-link manual download sources from ~/Downloads into ~/.cache/paru/clone/<pkg>/ ---
@@ -93,6 +98,43 @@ function autoLinkDownloadSources(pkg, requiredFile = null) {
   }
 }
 
+// --- Crash Recovery & Stale Lock Check ---
+app.get('/api/recovery', async (req, res) => {
+  const lockFile = '/var/lib/pacman/db.lck';
+  const hasLock = fs.existsSync(lockFile);
+  let isLockStale = false;
+  let runningProcesses = [];
+
+  try {
+    const { stdout } = await execAsync('pgrep -a -E "(pacman|paru|makepkg)" 2>/dev/null').catch(() => ({ stdout: '' }));
+    runningProcesses = stdout.trim().split('\n').filter(Boolean);
+    // If lock exists but no pacman/paru process is running, it's a stale lock from a crash
+    if (hasLock && runningProcesses.length === 0) {
+      isLockStale = true;
+    }
+  } catch {}
+
+  res.json({
+    hasLock,
+    isLockStale,
+    runningProcesses,
+  });
+});
+
+// --- Clean / Unlock Pacman Lock ---
+app.post('/api/unlock', async (req, res) => {
+  const lockFile = '/var/lib/pacman/db.lck';
+  try {
+    if (fs.existsSync(lockFile)) {
+      await execAsync(`pkexec rm -f ${lockFile}`);
+      return res.json({ ok: true, message: 'Database lock removed successfully' });
+    }
+    res.json({ ok: true, message: 'No lock file present' });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // --- AUR RPC v5 Proxy ---
 app.get('/api/search', async (req, res) => {
   const { q, by = 'name-desc' } = req.query;
@@ -123,7 +165,7 @@ app.get('/api/info', async (req, res) => {
 // --- Installed packages with real system Desktop Entry verification ---
 app.get('/api/installed', async (req, res) => {
   try {
-    const desktopEntries = getSystemDesktopEntries();
+    const desktopEntriesMap = getSystemDesktopEntries();
 
     const { stdout: aurPkgs } = await execAsync('pacman -Qm 2>/dev/null').catch(() => ({ stdout: '' }));
     const { stdout: allPkgs } = await execAsync('pacman -Q 2>/dev/null').catch(() => ({ stdout: '' }));
@@ -131,15 +173,17 @@ app.get('/api/installed', async (req, res) => {
     const aur = aurPkgs.trim().split('\n').filter(Boolean).map(l => {
       const [name, version] = l.split(' ');
       const cleanKey = name.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
-      const desktop = desktopEntries.get(cleanKey) || desktopEntries.get(name.toLowerCase());
-      const isLaunchable = Boolean(desktop && desktop.isGui);
+      const entries = desktopEntriesMap.get(cleanKey) || desktopEntriesMap.get(name.toLowerCase()) || [];
+      const guiEntries = entries.filter(e => e.isGui);
+      const isLaunchable = guiEntries.length > 0;
 
       return {
         name,
         version,
         source: 'aur',
         isLaunchable,
-        desktopFile: desktop?.filename || null,
+        desktopFile: guiEntries[0]?.filename || null,
+        desktopEntries: guiEntries,
       };
     });
 
@@ -164,8 +208,8 @@ app.get('/api/updates', async (req, res) => {
   }
 });
 
-// --- Live install/remove via SSE ---
-const activeInstalls = new Map();
+// --- Operation State Machine & Execution Engine ---
+const activeInstalls = new Map(); // pkg -> { child, send, state }
 
 app.get('/api/install', (req, res) => {
   const { pkg, action = 'install' } = req.query;
@@ -176,11 +220,18 @@ app.get('/api/install', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const send = (type, data) => {
+  let currentState = 'resolving';
+
+  const sendEvent = (type, data) => {
     res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
   };
 
-  send('status', `Starting ${action} for ${pkg}...`);
+  const setState = (newState, extra = {}) => {
+    currentState = newState;
+    sendEvent('state_change', { state: newState, pkg, ...extra });
+  };
+
+  setState('resolving');
 
   // Pre-check and auto-link any downloaded sources from ~/Downloads into build cache
   if (action === 'install') {
@@ -196,7 +247,9 @@ app.get('/api/install', (req, res) => {
     args = ['-S', '--noconfirm', '--noprogressbar', '--color', 'never', '--sudoflags', '-A', pkg];
   }
 
+  // Spawn process with its own process group (detached: true) to enable clean subtree kill
   const child = spawn(cmd, args, {
+    detached: true,
     env: {
       ...process.env,
       HOME: os.homedir(),
@@ -205,63 +258,135 @@ app.get('/api/install', (req, res) => {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  activeInstalls.set(pkg, { child, send });
+  const session = { child, send: sendEvent, state: currentState };
+  activeInstalls.set(pkg, session);
 
-  child.stdout.on('data', d => {
+  let detectedError = null;
+
+  const handleOutput = (d) => {
     const text = d.toString();
-    send('log', text);
+    sendEvent('log', text);
+
+    // State machine transitions derived from real process output
+    if (text.includes('Downloading') || text.includes('Retrieving sources') || text.includes('curl') || text.includes('PKGBUILDs up to date')) {
+      if (currentState !== 'downloading') setState('downloading');
+
+      // Extract real measured transfer metrics if present
+      const speedMatch = text.match(/([\d.]+\s*(?:MB\/s|MiB\/s|kB\/s|KB\/s|GB\/s))/i);
+      const sizeMatch = text.match(/([\d.]+[MGK]i?B?)\s+(?:of|\/)\s+([\d.]+[MGK]i?B?)/i);
+      const percentMatch = text.match(/(\d{1,3})%/);
+
+      if (speedMatch || sizeMatch || percentMatch) {
+        sendEvent('metrics', {
+          speed: speedMatch ? speedMatch[1] : null,
+          downloaded: sizeMatch ? `${sizeMatch[1]} / ${sizeMatch[2]}` : null,
+          percent: percentMatch ? parseInt(percentMatch[1], 10) : null,
+        });
+      }
+    } else if (text.includes('Making package') || text.includes('Starting build') || text.includes('Compiling') || text.includes('gcc') || text.includes('ninja') || text.includes('cargo')) {
+      if (currentState !== 'building') setState('building');
+    } else if (text.includes('Installing') || text.includes('pacman -U') || text.includes('Starting package()') || text.includes('authenticat')) {
+      if (currentState !== 'installing') setState('installing');
+    }
+
+    // Standardized Error Pattern Matching
     if (text.includes('was not found in the build directory and is not a URL')) {
       const match = text.match(/ERROR:\s*([^\s]+)\s*was not found/i);
-      if (match) {
-        autoLinkDownloadSources(pkg, match[1]);
+      detectedError = {
+        code: 'SOURCE_MISSING_MANUAL_DOWNLOAD',
+        message: 'This package requires a source file that cannot be downloaded automatically.',
+        filename: match ? match[1] : 'source package',
+        recoverable: true,
+      };
+      if (match) autoLinkDownloadSources(pkg, match[1]);
+    } else if (text.includes('unable to lock database') || text.includes('db.lck')) {
+      detectedError = {
+        code: 'PACMAN_LOCKED',
+        message: 'Pacman database is currently locked by another process.',
+        details: '/var/lib/pacman/db.lck exists',
+        recoverable: true,
+      };
+    } else if (text.includes('failed to resolve dependencies') || text.includes('could not satisfy dependencies')) {
+      detectedError = {
+        code: 'DEPENDENCY_UNRESOLVED',
+        message: 'Required dependencies could not be resolved in AUR or official repos.',
+        details: text.trim(),
+        recoverable: false,
+      };
+    } else if (text.includes('password incorrect') || text.includes('authentication failed')) {
+      detectedError = {
+        code: 'AUTH_FAILED',
+        message: 'Root authentication was cancelled or failed.',
+        recoverable: true,
+      };
+    } else if (text.includes('packages failed to build') || text.includes('failed in build()')) {
+      if (!detectedError) {
+        detectedError = {
+          code: 'BUILD_FAILED',
+          message: 'The package failed during the local makepkg compilation process.',
+          details: text.trim(),
+          recoverable: true,
+        };
       }
     }
-  });
+  };
 
-  child.stderr.on('data', d => {
-    const text = d.toString();
-    send('log', text);
-    if (text.includes('was not found in the build directory and is not a URL')) {
-      const match = text.match(/ERROR:\s*([^\s]+)\s*was not found/i);
-      if (match) {
-        autoLinkDownloadSources(pkg, match[1]);
-      }
-    }
-  });
+  child.stdout.on('data', handleOutput);
+  child.stderr.on('data', handleOutput);
 
   child.on('close', code => {
     activeInstalls.delete(pkg);
-    send('done', code === 0 ? 'success' : 'error');
+    if (code === 0) {
+      setState('completed');
+      sendEvent('done', { status: 'success' });
+    } else {
+      setState('failed', { error: detectedError });
+      sendEvent('done', { status: 'error', error: detectedError });
+    }
     res.end();
   });
 
   child.on('error', err => {
-    send('error', err.message);
+    activeInstalls.delete(pkg);
+    setState('failed', { error: { code: 'EXEC_ERROR', message: err.message, recoverable: false } });
+    sendEvent('error', err.message);
     res.end();
   });
 
   req.on('close', () => {
     if (activeInstalls.has(pkg)) {
-      activeInstalls.get(pkg).child.kill();
+      const active = activeInstalls.get(pkg);
+      try {
+        process.kill(-active.child.pid, 'SIGTERM');
+      } catch {}
       activeInstalls.delete(pkg);
     }
   });
 });
 
-// --- Cancel active install ---
+// --- Clean Process Group Cancellation ---
 app.post('/api/cancel', (req, res) => {
   const { pkg } = req.body;
   if (pkg && activeInstalls.has(pkg)) {
     const session = activeInstalls.get(pkg);
     try {
-      session.child.kill('SIGTERM');
-      session.send('log', 'Installation cancelled by user.');
-      session.send('done', 'cancelled');
+      // Kill the entire process subtree using negative PID
+      process.kill(-session.child.pid, 'SIGTERM');
+      session.send('log', '>> Installation cancelled by user. Terminating process tree…');
+      session.send('state_change', { state: 'cancelled', pkg });
+      session.send('done', { status: 'cancelled' });
+
+      // Fallback SIGKILL after 1.5s grace period if still active
+      setTimeout(() => {
+        try {
+          process.kill(-session.child.pid, 'SIGKILL');
+        } catch {}
+      }, 1500);
     } catch {}
     activeInstalls.delete(pkg);
     return res.json({ ok: true, cancelled: pkg });
   }
-  res.json({ ok: false, error: 'No active installation found' });
+  res.json({ ok: false, error: 'No active installation found for package' });
 });
 
 // --- Open Downloads Folder ---
@@ -274,14 +399,14 @@ app.post('/api/open-downloads', (req, res) => {
 
 // --- Launch installed app ---
 app.post('/api/launch', (req, res) => {
-  const { pkg } = req.body;
+  const { pkg, desktopFile } = req.body;
   if (!pkg) return res.status(400).json({ error: 'pkg required' });
 
-  const desktopEntries = getSystemDesktopEntries();
+  const desktopEntriesMap = getSystemDesktopEntries();
   const cleanKey = pkg.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
-  const desktop = desktopEntries.get(cleanKey) || desktopEntries.get(pkg.toLowerCase());
+  const entries = desktopEntriesMap.get(cleanKey) || desktopEntriesMap.get(pkg.toLowerCase()) || [];
 
-  let target = desktop ? desktop.filename : pkg.replace(/-(?:bin|git)$/, '');
+  let target = desktopFile || entries[0]?.filename || pkg.replace(/-(?:bin|git)$/, '');
 
   const child = spawn('gtk-launch', [target], { detached: true, stdio: 'ignore' });
   child.unref();

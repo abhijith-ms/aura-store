@@ -8,9 +8,10 @@ import AppIcon from './components/AppIcon';
 import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
-  streamInstall, launchApp, cancelInstall, isLaunchable, CATEGORIES, getAppDisplayName, formatNumber, timeAgo
+  streamInstall, launchApp, cancelInstall, checkRecovery, unlockPacman,
+  getOperationHistory, addOperationHistory, isLaunchable, CATEGORIES, getAppDisplayName,
+  formatNumber, timeAgo
 } from './services/aurApi';
-
 
 // Top curated candidates for Explore discovery (dynamically sorted by popularity/votes)
 const DISCOVERY_POPULAR_CANDIDATES = [
@@ -39,7 +40,7 @@ function ToastStack({ toasts }) {
     <div className="toast-stack">
       {toasts.map(t => (
         <div key={t.id} className={`toast ${t.type}`}>
-          <span>{t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'}</span>
+          <span>{t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : t.type === 'warning' ? '⚠' : 'ℹ'}</span>
           <span>{t.message}</span>
         </div>
       ))}
@@ -71,7 +72,83 @@ function SkeletonGrid({ count = 4, popular = false }) {
   );
 }
 
-// ---------- Installed Library View (Package Manager utility design) ----------
+// ---------- Activity History View ----------
+function ActivityTab({ history, onSelectPkg, onClearHistory }) {
+  if (!history || history.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-icon">📜</div>
+        <div className="empty-title">No recent activity</div>
+        <div className="empty-desc">Installations, updates, and removals will be recorded here.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="section-header" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
+        <div>
+          <div className="section-title">Recent Activity</div>
+          <div className="section-count">{history.length} logged operations</div>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onClearHistory}>
+          Clear History
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {history.map(item => {
+          const displayName = getAppDisplayName(item.pkg);
+          const isDone = item.status === 'completed';
+          const isCancelled = item.status === 'cancelled';
+
+          return (
+            <div
+              key={item.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 14px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              <AppIcon pkgName={item.pkg} size="sm" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{item.pkg}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  {item.action === 'remove' ? 'Removed package' : item.action === 'update' ? 'Updated package' : 'Installed package'} · {timeAgo(new Date(item.timestamp).getTime() / 1000)}
+                </div>
+                {item.error && (
+                  <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                    {item.error.message || item.error.code}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                {isDone ? (
+                  <span className="chip chip-green">✓ Completed</span>
+                ) : isCancelled ? (
+                  <span className="chip chip-gray">⊘ Cancelled</span>
+                ) : (
+                  <span className="chip chip-red">✕ Failed</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Installed Library View ----------
 function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
   const [filter, setFilter] = useState('');
 
@@ -124,7 +201,6 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
             const displayName = getAppDisplayName(pkg.name);
             const canLaunch = pkg.isLaunchable ?? isLaunchable(pkg.name);
 
-
             return (
               <div
                 key={pkg.name}
@@ -155,7 +231,7 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
                   {canLaunch && (
                     <button
                       className="btn btn-primary btn-sm"
-                      onClick={() => onLaunch(pkg.name, displayName)}
+                      onClick={() => onLaunch(pkg.name, displayName, pkg.desktopFile)}
                       title={`Launch ${displayName}`}
                     >
                       Open
@@ -348,11 +424,18 @@ function MainApp() {
   const [essentialPkgs, setEssentialPkgs] = useState([]);
   const [categoryPkgs, setCategoryPkgs] = useState([]);
   const [toasts, setToasts] = useState([]);
+  const [history, setHistory] = useState(() => getOperationHistory());
 
-  // Active install / update state
+  // Stale Lock / Crash Recovery Banner
+  const [staleLock, setStaleLock] = useState(false);
+
+  // Active install / update state (Synchronized with backend state machine)
   const [activePkg, setActivePkg] = useState('');
   const [activeAction, setActiveAction] = useState('install');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [opState, setOpState] = useState('idle');
+  const [metrics, setMetrics] = useState({});
+  const [lastError, setLastError] = useState(null);
   const [termLogs, setTermLogs] = useState([]);
   const [termOpen, setTermOpen] = useState(false);
 
@@ -374,9 +457,24 @@ function MainApp() {
     getUpdates().then(({ updates: u }) => setUpdates(u || [])).catch(() => {});
   }, []);
 
-  // Load initial packages dynamically sorted
+  const addToast = useCallback((message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }, []);
+
+  // Startup Recovery & Initial Packages Load
   useEffect(() => {
     refreshPackages();
+
+    // Check for crash recovery / stale lock
+    checkRecovery().then(({ isLockStale }) => {
+      if (isLockStale) {
+        setStaleLock(true);
+        addToast('Stale database lock detected from an interrupted operation.', 'warning');
+      }
+    });
+
     getMultiplePackageInfo(DISCOVERY_POPULAR_CANDIDATES).then(pkgs => {
       const sorted = [...pkgs].sort((a, b) => (b.NumVotes || 0) - (a.NumVotes || 0));
       setPopularPkgs(sorted.slice(0, 4));
@@ -385,7 +483,7 @@ function MainApp() {
       const sorted = [...pkgs].sort((a, b) => (b.NumVotes || 0) - (a.NumVotes || 0));
       setEssentialPkgs(sorted.slice(0, 4));
     });
-  }, [refreshPackages]);
+  }, [refreshPackages, addToast]);
 
   // Global Keyboard Shortcuts (Ctrl+K and Escape)
   useEffect(() => {
@@ -431,36 +529,53 @@ function MainApp() {
     return () => clearTimeout(searchTimer.current);
   }, [query, sortBy]);
 
-  const addToast = useCallback((message, type = 'info') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
-  }, []);
-
-  // Run single install / remove
+  // Run single install / remove with full state machine synchronization
   const runPackageAction = useCallback((pkgName, action, onFinish) => {
     setActivePkg(pkgName);
     setActiveAction(action);
     setIsProcessing(true);
+    setOpState('resolving');
+    setMetrics({});
+    setLastError(null);
     setTermLogs([]);
 
-    streamInstall(
-      pkgName,
-      action,
-      (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
-      (ok) => {
+    streamInstall(pkgName, action, {
+      onLog: (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
+      onStateChange: (event) => {
+        setOpState(event.state);
+        if (event.error) setLastError(event.error);
+      },
+      onMetrics: (m) => setMetrics(m),
+      onDone: (ok, error, finalStatus) => {
         setIsProcessing(false);
+        const status = finalStatus || (ok ? 'completed' : 'failed');
+        setOpState(status);
+
+        if (error) setLastError(error);
+
+        // Record in persistent operation history
+        const updatedHistory = addOperationHistory({
+          pkg: pkgName,
+          action,
+          status,
+          error: error || null,
+        });
+        setHistory(updatedHistory);
+
         if (ok) {
           setTermLogs(prev => [...prev, { text: `✓ Completed ${pkgName}`, type: 'done' }]);
           refreshPackages();
           addToast(`${pkgName} ${action === 'remove' ? 'removed' : 'installed'} successfully!`, 'success');
+        } else if (status === 'cancelled') {
+          setTermLogs(prev => [...prev, { text: `⊘ Cancelled ${pkgName}`, type: 'warning' }]);
+          addToast(`Installation cancelled for ${pkgName}`, 'info');
         } else {
           setTermLogs(prev => [...prev, { text: `✕ Failed for ${pkgName}`, type: 'error' }]);
-          addToast(`Action failed for ${pkgName}`, 'error');
+          addToast(error?.message || `Action failed for ${pkgName}`, 'error');
         }
         if (onFinish) onFinish(ok);
-      }
-    );
+      },
+    });
   }, [addToast, refreshPackages]);
 
   // Execute Batch Update Queue sequentially
@@ -514,9 +629,9 @@ function MainApp() {
     runPackageAction(pkg.Name, 'install');
   };
 
-  const handleLaunchApp = async (pkgName, displayName) => {
+  const handleLaunchApp = async (pkgName, displayName, desktopFile) => {
     addToast(`Launching ${displayName}…`, 'info');
-    await launchApp(pkgName);
+    await launchApp(pkgName, desktopFile);
   };
 
   const handleCancelInstall = async () => {
@@ -527,8 +642,26 @@ function MainApp() {
     setIsProcessing(false);
     setBatchActive(false);
     setActivePkg('');
+    setOpState('cancelled');
     addToast('Installation cancelled. No changes made.', 'info');
     refreshPackages();
+  };
+
+  const handleUnlockDatabase = async () => {
+    addToast('Unlocking pacman database…', 'info');
+    const res = await unlockPacman();
+    if (res.ok) {
+      setStaleLock(false);
+      addToast('Pacman database unlocked successfully.', 'success');
+    } else {
+      addToast('Failed to unlock database.', 'error');
+    }
+  };
+
+  const handleClearHistory = () => {
+    localStorage.removeItem('aura_operation_history_v1');
+    setHistory([]);
+    addToast('Cleared activity history.', 'info');
   };
 
   const handleDependencyClick = async (depName) => {
@@ -600,13 +733,41 @@ function MainApp() {
           </div>
         </div>
 
-        {/* Top Progress Bar */}
+        {/* Stale Lock Recovery Banner */}
+        {staleLock && (
+          <div style={{
+            background: 'var(--surface-hover)',
+            borderBottom: '1px solid var(--warning)',
+            padding: '8px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 12.5,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠ Stale Database Lock</span>
+              <span style={{ color: 'var(--text-secondary)' }}>A previous package operation did not complete cleanly.</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary btn-sm" onClick={handleUnlockDatabase}>
+                Clean Lock
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setStaleLock(false)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Top Progress Bar (Honest State Machine & Transfer Metrics) */}
         <TopProgressBar
           active={isProcessing}
           pkgName={activePkg}
           batchIndex={batchIndex}
           batchTotal={batchActive ? batchList.length : 0}
           action={activeAction}
+          opState={opState}
+          metrics={metrics}
           logs={termLogs}
           onCancel={handleCancelInstall}
           onToggleTerminal={() => setTermOpen(o => !o)}
@@ -622,6 +783,8 @@ function MainApp() {
               pkg={selectedPkg}
               installed={installed}
               isInstalling={isProcessing && activePkg === selectedPkg.Name}
+              opState={opState}
+              lastError={lastError}
               installLogs={termLogs}
               onBack={() => setSelectedPkg(null)}
               onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
@@ -632,7 +795,6 @@ function MainApp() {
               addToast={addToast}
             />
           ) : isSearching ? (
-
             /* Search Results Mode */
             <div>
               <div className="section-header">
@@ -782,6 +944,13 @@ function MainApp() {
               batchIndex={batchIndex}
               batchList={batchList}
               pkgStatusMap={pkgStatusMap}
+            />
+          ) : view === 'activity' ? (
+            /* Activity History Tab */
+            <ActivityTab
+              history={history}
+              onSelectPkg={setSelectedPkg}
+              onClearHistory={handleClearHistory}
             />
           ) : null}
 

@@ -186,24 +186,88 @@ export const getPkgbuild = async (pkg) => {
   return data.pkgbuild || '';
 };
 
-export const streamInstall = (pkg, action, onLog, onDone) => {
+export const checkRecovery = async () => {
+
+  try {
+    const res = await fetch(`${API}/api/recovery`);
+    return res.json();
+  } catch {
+    return { hasLock: false, isLockStale: false, runningProcesses: [] };
+  }
+};
+
+export const unlockPacman = async () => {
+  try {
+    const res = await fetch(`${API}/api/unlock`, { method: 'POST' });
+    return res.json();
+  } catch {
+    return { ok: false };
+  }
+};
+
+// --- Operation History Helper (Persistent) ---
+const HISTORY_KEY = 'aura_operation_history_v1';
+
+export const getOperationHistory = () => {
+  try {
+    const stored = localStorage.getItem(HISTORY_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const addOperationHistory = (entry) => {
+  try {
+    const history = getOperationHistory();
+    const updated = [
+      { id: Date.now(), timestamp: new Date().toISOString(), ...entry },
+      ...history,
+    ].slice(0, 30);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+    return updated;
+  } catch {
+    return [];
+  }
+};
+
+export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
   const url = `${API}/api/install?pkg=${encodeURIComponent(pkg)}&action=${action}`;
   const es = new EventSource(url);
+
+  // Normalize callbacks (support both legacy functional signature and modern structured handler)
+  const isStructured = typeof callbacks === 'object';
+  const onLog = isStructured ? callbacks.onLog : callbacks;
+  const onStateChange = isStructured ? callbacks.onStateChange : null;
+  const onMetrics = isStructured ? callbacks.onMetrics : null;
+  const onDone = isStructured ? callbacks.onDone : onDoneLegacy;
+
   es.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.type === 'done') {
-      es.close();
-      onDone(msg.data === 'success');
-    } else {
-      onLog(msg.data, msg.type);
-    }
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'done') {
+        es.close();
+        const success = msg.data?.status === 'success' || msg.data === 'success';
+        const error = msg.data?.error || null;
+        if (onDone) onDone(success, error, msg.data?.status);
+      } else if (msg.type === 'state_change') {
+        if (onStateChange) onStateChange(msg.data);
+      } else if (msg.type === 'metrics') {
+        if (onMetrics) onMetrics(msg.data);
+      } else {
+        if (onLog) onLog(msg.data, msg.type);
+      }
+    } catch {}
   };
+
   es.onerror = () => {
     es.close();
-    onDone(false);
+    if (onDone) onDone(false, { code: 'NETWORK_ERROR', message: 'Connection to backend build stream lost.' }, 'error');
   };
+
   return () => es.close();
 };
+
 
 export const FEATURED = [
   { name: 'zen-browser-bin', icon: '🌊', label: 'Featured Browser' },

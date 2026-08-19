@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { getPkgbuild, formatNumber, timeAgo, getAppDisplayName, isLaunchable, openDownloadsFolder } from '../services/aurApi';
+import { getPkgbuild, formatNumber, timeAgo, getAppDisplayName, isLaunchable, openDownloadsFolder, unlockPacman } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
 import AppIcon from './AppIcon';
 
@@ -7,6 +7,8 @@ export default function PackageDetail({
   pkg,
   installed,
   isInstalling = false,
+  opState = 'idle',
+  lastError = null,
   installLogs = [],
   onBack,
   onInstallStart,
@@ -27,35 +29,15 @@ export default function PackageDetail({
   const brandColor = getPackageBrandColor(pkg.Name);
   const canLaunch = isLaunchable(pkg.Name);
 
-  // Parse active install stage & diagnostics from real process logs
-  const { stage, isManualSourceRequired, missingFilename } = useMemo(() => {
-    if (!installLogs || installLogs.length === 0) {
-      return { stage: 0, isManualSourceRequired: false, missingFilename: '' };
-    }
-
-    let st = 1; // 1: Resolving, 2: Fetching, 3: Building, 4: Installing
-    let manualReq = false;
-    let missingFile = '';
-
-    const recent = installLogs.slice(-30);
-    for (const log of recent) {
-      const text = log.text || '';
-      if (text.includes('Downloading') || text.includes('Retrieving sources') || text.includes('curl')) {
-        st = Math.max(st, 2);
-      } else if (text.includes('Making package') || text.includes('Compiling') || text.includes('gcc') || text.includes('cargo') || text.includes('ninja') || text.includes('Starting build')) {
-        st = Math.max(st, 3);
-      } else if (text.includes('Installing') || text.includes('pacman -U') || text.includes('authenticat')) {
-        st = Math.max(st, 4);
-      }
-
-      if (text.includes('was not found in the build directory and is not a URL')) {
-        manualReq = true;
-        const m = text.match(/ERROR:\s*([^\s]+)\s*was not found/i);
-        if (m) missingFile = m[1];
-      }
-    }
-    return { stage: st, isManualSourceRequired: manualReq, missingFilename: missingFile };
-  }, [installLogs]);
+  // Map backend operation state to 4-stage stepper
+  const stage = useMemo(() => {
+    if (!isInstalling) return 0;
+    if (opState === 'resolving') return 1;
+    if (opState === 'downloading') return 2;
+    if (opState === 'building') return 3;
+    if (opState === 'installing') return 4;
+    return 1;
+  }, [isInstalling, opState]);
 
   const togglePkgbuild = async () => {
     if (!showPkgbuild && !pkgbuild) {
@@ -88,6 +70,17 @@ export default function PackageDetail({
   const handleOpenDownloads = async () => {
     await openDownloadsFolder();
     addToast('Opened ~/Downloads folder', 'info');
+  };
+
+  const handleUnlockAndRetry = async () => {
+    addToast('Attempting to clean pacman lock…', 'info');
+    const res = await unlockPacman();
+    if (res.ok) {
+      addToast('Lock removed. Retrying build…', 'success');
+      onInstallStart(pkg.Name, 'install');
+    } else {
+      addToast('Failed to remove lock. Sudo permissions required.', 'error');
+    }
   };
 
   const deps = pkg.Depends || [];
@@ -155,7 +148,6 @@ export default function PackageDetail({
                 </button>
               </div>
             ) : isInstalled ? (
-
               <>
                 {canLaunch && (
                   <button className="btn btn-primary btn-lg" onClick={() => onLaunch(pkg.Name, displayName)}>
@@ -197,24 +189,61 @@ export default function PackageDetail({
         )}
       </div>
 
-      {/* Manual Download Helper Card if vendor requires user login */}
-      {!isInstalling && isManualSourceRequired && (
+      {/* Contextual Error Guidance Card */}
+      {!isInstalling && lastError && (
         <div className="detail-section" style={{ borderColor: 'var(--warning)', background: 'var(--surface)' }}>
-          <div className="detail-section-title">
-            <span style={{ color: 'var(--warning)' }}>📥 Manual Download Source Required</span>
-            <span className="chip chip-orange">Proprietary EULA</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            This vendor restricts automatic downloads. Download <code style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{missingFilename || 'the source installer'}</code> into your <strong style={{ color: 'var(--text-primary)' }}>Downloads</strong> folder, and Aura will automatically detect and link it when you click Retry!
-          </p>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-            <button className="btn btn-ghost" onClick={handleOpenDownloads}>
-              Open Downloads Folder
-            </button>
-            <button className="btn btn-primary" onClick={() => onInstallStart(pkg.Name, 'install')}>
-              Retry Build
-            </button>
-          </div>
+          {lastError.code === 'SOURCE_MISSING_MANUAL_DOWNLOAD' ? (
+            <div>
+              <div className="detail-section-title">
+                <span style={{ color: 'var(--warning)' }}>📥 Manual Download Source Required</span>
+                <span className="chip chip-orange">Proprietary EULA</span>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                This package requires a source file (<code style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>{lastError.filename}</code>) that cannot be downloaded automatically. Download it from the vendor portal into your <strong>Downloads</strong> folder, and Aura will link it when you click Retry!
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="btn btn-ghost" onClick={handleOpenDownloads}>
+                  Open Downloads Folder
+                </button>
+                <button className="btn btn-primary" onClick={() => onInstallStart(pkg.Name, 'install')}>
+                  Retry Build
+                </button>
+              </div>
+            </div>
+          ) : lastError.code === 'PACMAN_LOCKED' ? (
+            <div>
+              <div className="detail-section-title">
+                <span style={{ color: 'var(--danger)' }}>🔒 Pacman Database Locked</span>
+                <span className="chip chip-red">Lock Conflict</span>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                Another process is holding the pacman database lock (<code style={{ fontFamily: 'var(--font-mono)' }}>/var/lib/pacman/db.lck</code>). If no other updater is running, you can unlock it safely.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="btn btn-primary" onClick={handleUnlockAndRetry}>
+                  Clean Lock & Retry
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="detail-section-title">
+                <span style={{ color: 'var(--danger)' }}>✕ Couldn't Install {displayName}</span>
+                <span className="chip chip-red">{lastError.code || 'BUILD_FAILED'}</span>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                {lastError.message || 'The package failed during the compilation or installation process.'}
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="btn btn-ghost" onClick={onToggleTerminal}>
+                  Show Terminal Logs
+                </button>
+                <button className="btn btn-primary" onClick={() => onInstallStart(pkg.Name, 'install')}>
+                  Retry Build
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -6,7 +6,9 @@ const NAV = [
   { id: 'explore', icon: '✦', label: 'Explore' },
   { id: 'installed', icon: '✓', label: 'Installed' },
   { id: 'updates', icon: '↑', label: 'Updates' },
+  { id: 'activity', icon: '📜', label: 'Activity' },
 ];
+
 
 export default function Sidebar({ active, onNav, installedCount, updateCount }) {
   const { themeSetting, setThemeSetting } = useTheme();
