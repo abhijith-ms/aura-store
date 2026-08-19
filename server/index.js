@@ -18,7 +18,9 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// --- System Desktop Entry Indexer (Supports Multiple Entries per Package) ---
+// ============================================================================
+// 1. System Desktop Entry Indexer (Multi-Entry Support)
+// ============================================================================
 function getSystemDesktopEntries() {
   const dirs = [
     '/usr/share/applications',
@@ -26,7 +28,7 @@ function getSystemDesktopEntries() {
     '/var/lib/flatpak/exports/share/applications',
   ];
 
-  const entriesMap = new Map(); // key -> Array<{ filename, name, exec, isGui }>
+  const entriesMap = new Map(); // baseKey -> Array<{ filename, name, exec, isGui }>
 
   for (const dir of dirs) {
     if (!fs.existsSync(dir)) continue;
@@ -64,7 +66,9 @@ function getSystemDesktopEntries() {
   return entriesMap;
 }
 
-// --- Helper to auto-link manual download sources from ~/Downloads into ~/.cache/paru/clone/<pkg>/ ---
+// ============================================================================
+// 2. Helper: Auto-link Manual Downloads (e.g. Cisco Packet Tracer, Oracle, etc.)
+// ============================================================================
 function autoLinkDownloadSources(pkg, requiredFile = null) {
   const downloadsDir = path.join(os.homedir(), 'Downloads');
   const cloneDir = path.join(os.homedir(), '.cache', 'paru', 'clone', pkg);
@@ -98,6 +102,251 @@ function autoLinkDownloadSources(pkg, requiredFile = null) {
   }
 }
 
+// ============================================================================
+// 3. First-Class Operation Engine (State Machine, Concurrency & Lifecycle)
+// ============================================================================
+class OperationEngine {
+  constructor() {
+    this.activeOperation = null; // currently running Operation object
+    this.history = [];           // array of completed/failed/cancelled operations
+    this.subscribers = new Map(); // opId -> Set<Response>
+    this.loadHistory();
+  }
+
+  loadHistory() {
+    try {
+      const historyFile = path.join(os.homedir(), '.cache', 'aura', 'operation_history.json');
+      if (fs.existsSync(historyFile)) {
+        this.history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+      }
+    } catch {}
+  }
+
+  persistHistory() {
+    try {
+      const auraCache = path.join(os.homedir(), '.cache', 'aura');
+      if (!fs.existsSync(auraCache)) fs.mkdirSync(auraCache, { recursive: true });
+      fs.writeFileSync(
+        path.join(auraCache, 'operation_history.json'),
+        JSON.stringify(this.history.slice(0, 50), null, 2)
+      );
+    } catch {}
+  }
+
+  createOperation(pkg, action) {
+    // Concurrency Guard: Block concurrent operations
+    if (this.activeOperation && ['resolving', 'downloading', 'building', 'installing'].includes(this.activeOperation.state)) {
+      const err = new Error(`Operation already active for ${this.activeOperation.pkg}`);
+      err.code = 'CONCURRENT_OPERATION_RUNNING';
+      err.activeOp = this.sanitizeOperation(this.activeOperation);
+      throw err;
+    }
+
+    const id = `op_${Date.now()}_${pkg.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    const op = {
+      id,
+      pkg,
+      action, // 'install' | 'remove' | 'update'
+      state: 'resolving',
+      stage: 'resolving',
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+      completedAt: null,
+      pid: null,
+      pgid: null,
+      metrics: { speed: null, downloaded: null, percent: null },
+      logs: [], // ring buffer of recent logs
+      error: null,
+      child: null,
+      verified: false,
+    };
+
+    this.activeOperation = op;
+    this.subscribers.set(id, new Set());
+    return op;
+  }
+
+  sanitizeOperation(op) {
+    if (!op) return null;
+    return {
+      id: op.id,
+      pkg: op.pkg,
+      action: op.action,
+      state: op.state,
+      stage: op.stage,
+      startedAt: op.startedAt,
+      updatedAt: op.updatedAt,
+      completedAt: op.completedAt,
+      metrics: op.metrics,
+      logs: op.logs.slice(-50),
+      error: op.error,
+      verified: op.verified,
+    };
+  }
+
+  broadcast(opId, type, data) {
+    const clients = this.subscribers.get(opId);
+    if (!clients) return;
+    const payload = `data: ${JSON.stringify({ opId, type, data })}\n\n`;
+    for (const res of clients) {
+      try { res.write(payload); } catch {}
+    }
+  }
+
+  addSubscriber(opId, res) {
+    if (!this.subscribers.has(opId)) {
+      this.subscribers.set(opId, new Set());
+    }
+    this.subscribers.get(opId).add(res);
+
+    res.on('close', () => {
+      const set = this.subscribers.get(opId);
+      if (set) {
+        set.delete(res);
+        if (set.size === 0 && (!this.activeOperation || this.activeOperation.id !== opId)) {
+          this.subscribers.delete(opId);
+        }
+      }
+    });
+  }
+
+  setState(opId, newState, extra = {}) {
+    const op = this.activeOperation?.id === opId ? this.activeOperation : null;
+    if (!op) return;
+
+    op.state = newState;
+    op.stage = newState;
+    op.updatedAt = Date.now();
+    if (extra.error) op.error = extra.error;
+
+    this.broadcast(opId, 'state_change', {
+      state: newState,
+      stage: newState,
+      pkg: op.pkg,
+      ...extra,
+    });
+  }
+
+  addLog(opId, text, type = 'log') {
+    const op = this.activeOperation?.id === opId ? this.activeOperation : null;
+    if (!op) return;
+
+    op.logs.push({ text, type, ts: Date.now() });
+    if (op.logs.length > 300) op.logs.shift(); // 300-line ring buffer
+    this.broadcast(opId, 'log', text);
+  }
+
+  setMetrics(opId, metrics) {
+    const op = this.activeOperation?.id === opId ? this.activeOperation : null;
+    if (!op) return;
+
+    op.metrics = { ...op.metrics, ...metrics };
+    this.broadcast(opId, 'metrics', op.metrics);
+  }
+
+  async finishOperation(opId, finalStatus, error = null) {
+    const op = this.activeOperation?.id === opId ? this.activeOperation : null;
+    if (!op) return;
+
+    op.state = finalStatus;
+    op.stage = finalStatus;
+    op.completedAt = Date.now();
+    op.error = error;
+
+    // Strict Verification Invariant (Rule 1: Verify actual package state)
+    if (finalStatus === 'completed' && (op.action === 'install' || op.action === 'update')) {
+      try {
+        const { stdout } = await execAsync(`pacman -Q ${op.pkg} 2>/dev/null`);
+        op.verified = Boolean(stdout.trim());
+      } catch {
+        op.verified = false;
+      }
+    } else if (finalStatus === 'completed' && op.action === 'remove') {
+      try {
+        await execAsync(`pacman -Q ${op.pkg} 2>/dev/null`);
+        op.verified = false;
+      } catch {
+        op.verified = true;
+      }
+    }
+
+    this.broadcast(opId, 'done', {
+      status: finalStatus,
+      error,
+      verified: op.verified,
+    });
+
+    // Record in persistent history
+    this.history.unshift({
+      id: op.id,
+      pkg: op.pkg,
+      action: op.action,
+      state: op.state,
+      startedAt: op.startedAt,
+      completedAt: op.completedAt,
+      error: op.error,
+      verified: op.verified,
+    });
+    this.history = this.history.slice(0, 50);
+    this.persistHistory();
+
+    this.activeOperation = null;
+  }
+
+  async cancelOperation(opId = null) {
+    const op = (opId && this.activeOperation?.id === opId) || (!opId && this.activeOperation)
+      ? this.activeOperation
+      : null;
+
+    if (!op || !op.child) {
+      return { ok: false, error: 'No active operation to cancel' };
+    }
+
+    const pid = op.child.pid;
+    try {
+      // Tree-wide kill via negative PID
+      process.kill(-pid, 'SIGTERM');
+      this.addLog(op.id, '>> Installation cancelled by user. Terminating process tree…', 'warning');
+
+      // Fallback SIGKILL after 1.5s grace period if still active
+      setTimeout(() => {
+        try { process.kill(-pid, 'SIGKILL'); } catch {}
+      }, 1500);
+    } catch {}
+
+    await this.finishOperation(op.id, 'cancelled', {
+      code: 'USER_CANCELLED',
+      message: 'Operation was cancelled by user.',
+      stage: op.stage,
+      recoverable: true,
+      suggestedAction: 'retry',
+    });
+
+    return { ok: true, cancelled: op.pkg, opId: op.id };
+  }
+}
+
+const engine = new OperationEngine();
+
+// ============================================================================
+// 4. API Endpoints
+// ============================================================================
+
+// --- Active Operation & History Endpoints ---
+app.get('/api/operations/active', (req, res) => {
+  res.json({ activeOperation: engine.sanitizeOperation(engine.activeOperation) });
+});
+
+app.get('/api/operations/history', (req, res) => {
+  res.json({ history: engine.history });
+});
+
+app.post('/api/cancel', async (req, res) => {
+  const { opId } = req.body;
+  const result = await engine.cancelOperation(opId);
+  res.json(result);
+});
+
 // --- Crash Recovery & Stale Lock Check ---
 app.get('/api/recovery', async (req, res) => {
   const lockFile = '/var/lib/pacman/db.lck';
@@ -106,9 +355,9 @@ app.get('/api/recovery', async (req, res) => {
   let runningProcesses = [];
 
   try {
-    const { stdout } = await execAsync('pgrep -a -E "(pacman|paru|makepkg)" 2>/dev/null').catch(() => ({ stdout: '' }));
+    const { stdout } = await execAsync('pgrep -a -E "(pacman|paru|makepkg|yay)" 2>/dev/null').catch(() => ({ stdout: '' }));
     runningProcesses = stdout.trim().split('\n').filter(Boolean);
-    // If lock exists but no pacman/paru process is running, it's a stale lock from a crash
+    // Explicit Guard: Only mark as stale if lock exists AND zero pacman processes exist
     if (hasLock && runningProcesses.length === 0) {
       isLockStale = true;
     }
@@ -118,13 +367,31 @@ app.get('/api/recovery', async (req, res) => {
     hasLock,
     isLockStale,
     runningProcesses,
+    message: hasLock
+      ? (isLockStale
+          ? 'Stale pacman database lock detected from an interrupted session.'
+          : 'Package manager is currently active in another process.')
+      : 'Pacman database is available.',
   });
 });
 
-// --- Clean / Unlock Pacman Lock ---
+// --- Safe Clean / Unlock Pacman Lock ---
 app.post('/api/unlock', async (req, res) => {
   const lockFile = '/var/lib/pacman/db.lck';
   try {
+    // Security Guard: Check if an active pacman process is running before deleting lock
+    const { stdout } = await execAsync('pgrep -a -E "(pacman|paru|makepkg|yay)" 2>/dev/null').catch(() => ({ stdout: '' }));
+    const running = stdout.trim().split('\n').filter(Boolean);
+
+    if (running.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        error: 'PACMAN_ACTIVE',
+        message: 'Cannot remove lock: a package manager process is currently running.',
+        runningProcesses: running,
+      });
+    }
+
     if (fs.existsSync(lockFile)) {
       await execAsync(`pkexec rm -f ${lockFile}`);
       return res.json({ ok: true, message: 'Database lock removed successfully' });
@@ -208,32 +475,73 @@ app.get('/api/updates', async (req, res) => {
   }
 });
 
-// --- Operation State Machine & Execution Engine ---
-const activeInstalls = new Map(); // pkg -> { child, send, state }
+// --- Live Install / Update / Remove via SSE (Authoritative Operation Stream) ---
+app.get('/api/install', async (req, res) => {
+  const { pkg, action = 'install', opId } = req.query;
 
-app.get('/api/install', (req, res) => {
-  const { pkg, action = 'install' } = req.query;
+  // Reconnection path: Client reconnecting to existing operation
+  if (opId && engine.activeOperation && engine.activeOperation.id === opId) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    engine.addSubscriber(opId, res);
+
+    // Send initial snapshot
+    res.write(`data: ${JSON.stringify({
+      opId,
+      type: 'state_change',
+      data: {
+        state: engine.activeOperation.state,
+        stage: engine.activeOperation.stage,
+        pkg: engine.activeOperation.pkg,
+        metrics: engine.activeOperation.metrics,
+      }
+    })}\n\n`);
+
+    for (const log of engine.activeOperation.logs.slice(-30)) {
+      res.write(`data: ${JSON.stringify({ opId, type: 'log', data: log.text })}\n\n`);
+    }
+    return;
+  }
+
   if (!pkg) return res.status(400).send('pkg required');
+
+  let op;
+  try {
+    op = engine.createOperation(pkg, action);
+  } catch (err) {
+    if (err.code === 'CONCURRENT_OPERATION_RUNNING') {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        data: {
+          code: 'CONCURRENT_OPERATION_RUNNING',
+          message: `Another operation is currently in progress for ${err.activeOp.pkg}.`,
+          activeOp: err.activeOp,
+          recoverable: false,
+          suggestedAction: 'wait',
+        }
+      })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'done', data: { status: 'error' } })}\n\n`);
+      return res.end();
+    }
+    return res.status(500).json({ error: err.message });
+  }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  let currentState = 'resolving';
+  engine.addSubscriber(op.id, res);
+  engine.setState(op.id, 'resolving');
 
-  const sendEvent = (type, data) => {
-    res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
-  };
-
-  const setState = (newState, extra = {}) => {
-    currentState = newState;
-    sendEvent('state_change', { state: newState, pkg, ...extra });
-  };
-
-  setState('resolving');
-
-  // Pre-check and auto-link any downloaded sources from ~/Downloads into build cache
+  // Pre-check and auto-link manual download sources
   if (action === 'install') {
     autoLinkDownloadSources(pkg);
   }
@@ -258,18 +566,18 @@ app.get('/api/install', (req, res) => {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
-  const session = { child, send: sendEvent, state: currentState };
-  activeInstalls.set(pkg, session);
+  op.child = child;
+  op.pid = child.pid;
 
   let detectedError = null;
 
   const handleOutput = (d) => {
     const text = d.toString();
-    sendEvent('log', text);
+    engine.addLog(op.id, text);
 
     // State machine transitions derived from real process output
     if (text.includes('Downloading') || text.includes('Retrieving sources') || text.includes('curl') || text.includes('PKGBUILDs up to date')) {
-      if (currentState !== 'downloading') setState('downloading');
+      if (op.state !== 'downloading') engine.setState(op.id, 'downloading');
 
       // Extract real measured transfer metrics if present
       const speedMatch = text.match(/([\d.]+\s*(?:MB\/s|MiB\/s|kB\/s|KB\/s|GB\/s))/i);
@@ -277,16 +585,16 @@ app.get('/api/install', (req, res) => {
       const percentMatch = text.match(/(\d{1,3})%/);
 
       if (speedMatch || sizeMatch || percentMatch) {
-        sendEvent('metrics', {
+        engine.setMetrics(op.id, {
           speed: speedMatch ? speedMatch[1] : null,
           downloaded: sizeMatch ? `${sizeMatch[1]} / ${sizeMatch[2]}` : null,
           percent: percentMatch ? parseInt(percentMatch[1], 10) : null,
         });
       }
     } else if (text.includes('Making package') || text.includes('Starting build') || text.includes('Compiling') || text.includes('gcc') || text.includes('ninja') || text.includes('cargo')) {
-      if (currentState !== 'building') setState('building');
+      if (op.state !== 'building') engine.setState(op.id, 'building');
     } else if (text.includes('Installing') || text.includes('pacman -U') || text.includes('Starting package()') || text.includes('authenticat')) {
-      if (currentState !== 'installing') setState('installing');
+      if (op.state !== 'installing') engine.setState(op.id, 'installing');
     }
 
     // Standardized Error Pattern Matching
@@ -296,7 +604,9 @@ app.get('/api/install', (req, res) => {
         code: 'SOURCE_MISSING_MANUAL_DOWNLOAD',
         message: 'This package requires a source file that cannot be downloaded automatically.',
         filename: match ? match[1] : 'source package',
+        stage: 'downloading',
         recoverable: true,
+        suggestedAction: 'open_downloads',
       };
       if (match) autoLinkDownloadSources(pkg, match[1]);
     } else if (text.includes('unable to lock database') || text.includes('db.lck')) {
@@ -304,28 +614,36 @@ app.get('/api/install', (req, res) => {
         code: 'PACMAN_LOCKED',
         message: 'Pacman database is currently locked by another process.',
         details: '/var/lib/pacman/db.lck exists',
+        stage: 'resolving',
         recoverable: true,
+        suggestedAction: 'clean_lock',
       };
     } else if (text.includes('failed to resolve dependencies') || text.includes('could not satisfy dependencies')) {
       detectedError = {
         code: 'DEPENDENCY_UNRESOLVED',
         message: 'Required dependencies could not be resolved in AUR or official repos.',
         details: text.trim(),
+        stage: 'resolving',
         recoverable: false,
+        suggestedAction: 'show_logs',
       };
     } else if (text.includes('password incorrect') || text.includes('authentication failed')) {
       detectedError = {
         code: 'AUTH_FAILED',
         message: 'Root authentication was cancelled or failed.',
+        stage: 'installing',
         recoverable: true,
+        suggestedAction: 'retry_sudo',
       };
     } else if (text.includes('packages failed to build') || text.includes('failed in build()')) {
       if (!detectedError) {
         detectedError = {
           code: 'BUILD_FAILED',
-          message: 'The package failed during the local makepkg compilation process.',
+          message: 'The package failed during the makepkg compilation process.',
           details: text.trim(),
+          stage: 'building',
           recoverable: true,
+          suggestedAction: 'show_logs',
         };
       }
     }
@@ -334,59 +652,25 @@ app.get('/api/install', (req, res) => {
   child.stdout.on('data', handleOutput);
   child.stderr.on('data', handleOutput);
 
-  child.on('close', code => {
-    activeInstalls.delete(pkg);
+  child.on('close', async (code) => {
     if (code === 0) {
-      setState('completed');
-      sendEvent('done', { status: 'success' });
+      await engine.finishOperation(op.id, 'completed');
     } else {
-      setState('failed', { error: detectedError });
-      sendEvent('done', { status: 'error', error: detectedError });
+      await engine.finishOperation(op.id, 'failed', detectedError);
     }
     res.end();
   });
 
-  child.on('error', err => {
-    activeInstalls.delete(pkg);
-    setState('failed', { error: { code: 'EXEC_ERROR', message: err.message, recoverable: false } });
-    sendEvent('error', err.message);
+  child.on('error', async (err) => {
+    await engine.finishOperation(op.id, 'failed', {
+      code: 'EXEC_ERROR',
+      message: err.message,
+      stage: op.stage,
+      recoverable: false,
+      suggestedAction: 'show_logs',
+    });
     res.end();
   });
-
-  req.on('close', () => {
-    if (activeInstalls.has(pkg)) {
-      const active = activeInstalls.get(pkg);
-      try {
-        process.kill(-active.child.pid, 'SIGTERM');
-      } catch {}
-      activeInstalls.delete(pkg);
-    }
-  });
-});
-
-// --- Clean Process Group Cancellation ---
-app.post('/api/cancel', (req, res) => {
-  const { pkg } = req.body;
-  if (pkg && activeInstalls.has(pkg)) {
-    const session = activeInstalls.get(pkg);
-    try {
-      // Kill the entire process subtree using negative PID
-      process.kill(-session.child.pid, 'SIGTERM');
-      session.send('log', '>> Installation cancelled by user. Terminating process tree…');
-      session.send('state_change', { state: 'cancelled', pkg });
-      session.send('done', { status: 'cancelled' });
-
-      // Fallback SIGKILL after 1.5s grace period if still active
-      setTimeout(() => {
-        try {
-          process.kill(-session.child.pid, 'SIGKILL');
-        } catch {}
-      }, 1500);
-    } catch {}
-    activeInstalls.delete(pkg);
-    return res.json({ ok: true, cancelled: pkg });
-  }
-  res.json({ ok: false, error: 'No active installation found for package' });
 });
 
 // --- Open Downloads Folder ---

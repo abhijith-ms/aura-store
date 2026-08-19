@@ -136,12 +136,12 @@ export const getInstalled = async () => {
   return res.json();
 };
 
-export const launchApp = async (pkg) => {
+export const launchApp = async (pkg, desktopFile = null) => {
   try {
     const res = await fetch(`${API}/api/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pkg }),
+      body: JSON.stringify({ pkg, desktopFile }),
     });
     return res.json();
   } catch {
@@ -149,12 +149,12 @@ export const launchApp = async (pkg) => {
   }
 };
 
-export const cancelInstall = async (pkg) => {
+export const cancelInstall = async (opId = null) => {
   try {
     const res = await fetch(`${API}/api/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pkg }),
+      body: JSON.stringify({ opId }),
     });
     return res.json();
   } catch {
@@ -162,8 +162,25 @@ export const cancelInstall = async (pkg) => {
   }
 };
 
-export const openDownloadsFolder = async () => {
+export const getActiveOperation = async () => {
+  try {
+    const res = await fetch(`${API}/api/operations/active`);
+    return res.json();
+  } catch {
+    return { activeOperation: null };
+  }
+};
 
+export const getServerOperationHistory = async () => {
+  try {
+    const res = await fetch(`${API}/api/operations/history`);
+    return res.json();
+  } catch {
+    return { history: [] };
+  }
+};
+
+export const openDownloadsFolder = async () => {
   try {
     const res = await fetch(`${API}/api/open-downloads`, { method: 'POST' });
     return res.json();
@@ -171,9 +188,6 @@ export const openDownloadsFolder = async () => {
     return { ok: false };
   }
 };
-
-
-
 
 export const getUpdates = async () => {
   const res = await fetch(`${API}/api/updates`);
@@ -187,12 +201,11 @@ export const getPkgbuild = async (pkg) => {
 };
 
 export const checkRecovery = async () => {
-
   try {
     const res = await fetch(`${API}/api/recovery`);
     return res.json();
   } catch {
-    return { hasLock: false, isLockStale: false, runningProcesses: [] };
+    return { hasLock: false, isLockStale: false, runningProcesses: [], message: '' };
   }
 };
 
@@ -205,7 +218,7 @@ export const unlockPacman = async () => {
   }
 };
 
-// --- Operation History Helper (Persistent) ---
+// --- Operation History Helper (Persistent Cache) ---
 const HISTORY_KEY = 'aura_operation_history_v1';
 
 export const getOperationHistory = () => {
@@ -221,9 +234,9 @@ export const addOperationHistory = (entry) => {
   try {
     const history = getOperationHistory();
     const updated = [
-      { id: Date.now(), timestamp: new Date().toISOString(), ...entry },
-      ...history,
-    ].slice(0, 30);
+      { id: entry.id || Date.now(), timestamp: entry.timestamp || new Date().toISOString(), ...entry },
+      ...history.filter(h => h.id !== entry.id),
+    ].slice(0, 50);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
     return updated;
   } catch {
@@ -232,15 +245,15 @@ export const addOperationHistory = (entry) => {
 };
 
 export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
-  const url = `${API}/api/install?pkg=${encodeURIComponent(pkg)}&action=${action}`;
-  const es = new EventSource(url);
-
-  // Normalize callbacks (support both legacy functional signature and modern structured handler)
   const isStructured = typeof callbacks === 'object';
   const onLog = isStructured ? callbacks.onLog : callbacks;
   const onStateChange = isStructured ? callbacks.onStateChange : null;
   const onMetrics = isStructured ? callbacks.onMetrics : null;
   const onDone = isStructured ? callbacks.onDone : onDoneLegacy;
+  const opIdParam = isStructured && callbacks.opId ? `&opId=${encodeURIComponent(callbacks.opId)}` : '';
+
+  const url = `${API}/api/install?pkg=${encodeURIComponent(pkg)}&action=${action}${opIdParam}`;
+  const es = new EventSource(url);
 
   es.onmessage = (e) => {
     try {
@@ -249,13 +262,15 @@ export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
         es.close();
         const success = msg.data?.status === 'success' || msg.data === 'success';
         const error = msg.data?.error || null;
-        if (onDone) onDone(success, error, msg.data?.status);
+        if (onDone) onDone(success, error, msg.data?.status, msg.opId);
       } else if (msg.type === 'state_change') {
-        if (onStateChange) onStateChange(msg.data);
+        if (onStateChange) onStateChange(msg.data, msg.opId);
       } else if (msg.type === 'metrics') {
-        if (onMetrics) onMetrics(msg.data);
+        if (onMetrics) onMetrics(msg.data, msg.opId);
+      } else if (msg.type === 'error') {
+        if (onDone) onDone(false, msg.data, 'error', msg.opId);
       } else {
-        if (onLog) onLog(msg.data, msg.type);
+        if (onLog) onLog(msg.data, msg.type, msg.opId);
       }
     } catch {}
   };
@@ -267,6 +282,7 @@ export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
 
   return () => es.close();
 };
+
 
 
 export const FEATURED = [

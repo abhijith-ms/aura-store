@@ -9,6 +9,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
   streamInstall, launchApp, cancelInstall, checkRecovery, unlockPacman,
+  getActiveOperation, getServerOperationHistory,
   getOperationHistory, addOperationHistory, isLaunchable, CATEGORIES, getAppDisplayName,
   formatNumber, timeAgo
 } from './services/aurApi';
@@ -72,14 +73,16 @@ function SkeletonGrid({ count = 4, popular = false }) {
   );
 }
 
-// ---------- Activity History View ----------
+// ---------- Activity History View (Lightweight & Operational) ----------
 function ActivityTab({ history, onSelectPkg, onClearHistory }) {
+  const [expandedId, setExpandedId] = useState(null);
+
   if (!history || history.length === 0) {
     return (
       <div className="empty-state">
         <div className="empty-icon">📜</div>
         <div className="empty-title">No recent activity</div>
-        <div className="empty-desc">Installations, updates, and removals will be recorded here.</div>
+        <div className="empty-desc">Completed, failed, and cancelled package operations will be logged here.</div>
       </div>
     );
   }
@@ -89,57 +92,107 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
       <div className="section-header" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
           <div className="section-title">Recent Activity</div>
-          <div className="section-count">{history.length} logged operations</div>
+          <div className="section-count">{history.length} operations recorded</div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={onClearHistory}>
           Clear History
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {history.map(item => {
           const displayName = getAppDisplayName(item.pkg);
-          const isDone = item.status === 'completed';
-          const isCancelled = item.status === 'cancelled';
+          const isDone = item.state === 'completed' || item.status === 'completed';
+          const isCancelled = item.state === 'cancelled' || item.status === 'cancelled';
+          const isExpanded = expandedId === item.id;
+          const timeLabel = item.startedAt ? timeAgo(item.startedAt / 1000) : (item.timestamp ? timeAgo(new Date(item.timestamp).getTime() / 1000) : 'recently');
 
           return (
             <div
               key={item.id}
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '10px 14px',
+                flexDirection: 'column',
                 background: 'var(--surface)',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-sm)',
+                overflow: 'hidden',
+                transition: 'border-color 0.15s ease',
               }}
             >
-              <AppIcon pkgName={item.pkg} size="sm" />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{item.pkg}</span>
-                </div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
-                  {item.action === 'remove' ? 'Removed package' : item.action === 'update' ? 'Updated package' : 'Installed package'} · {timeAgo(new Date(item.timestamp).getTime() / 1000)}
-                </div>
-                {item.error && (
-                  <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
-                    {item.error.message || item.error.code}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '10px 14px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setExpandedId(isExpanded ? null : item.id)}
+              >
+                <AppIcon pkgName={item.pkg} size="sm" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{item.pkg}</span>
+                    {item.verified && <span className="chip chip-green" style={{ fontSize: 10, padding: '1px 5px' }}>✓ Verified</span>}
                   </div>
-                )}
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {item.action === 'remove' ? 'Removed package' : item.action === 'update' ? 'Updated package' : 'Installed package'} · {timeLabel}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {isDone ? (
+                    <span className="chip chip-green">✓ Completed</span>
+                  ) : isCancelled ? (
+                    <span className="chip chip-gray">⊘ Cancelled</span>
+                  ) : (
+                    <span className="chip chip-red">✕ Failed</span>
+                  )}
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isExpanded ? '▲' : '▼'}</span>
+                </div>
               </div>
 
-              <div>
-                {isDone ? (
-                  <span className="chip chip-green">✓ Completed</span>
-                ) : isCancelled ? (
-                  <span className="chip chip-gray">⊘ Cancelled</span>
-                ) : (
-                  <span className="chip chip-red">✕ Failed</span>
-                )}
-              </div>
+              {/* Collapsible Details / Error Breakdown */}
+              {isExpanded && (
+                <div style={{
+                  padding: '10px 14px',
+                  background: 'var(--surface-hover)',
+                  borderTop: '1px solid var(--border-subtle)',
+                  fontSize: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Operation ID: <code style={{ fontFamily: 'var(--font-mono)' }}>{item.id}</code></span>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ padding: '2px 6px', fontSize: 11 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectPkg({ Name: item.pkg, Description: 'AUR Package' });
+                      }}
+                    >
+                      View Package ↗
+                    </button>
+                  </div>
+
+                  {item.error && (
+                    <div style={{
+                      padding: 8,
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      borderRadius: 4,
+                      color: 'var(--danger)',
+                    }}>
+                      <div style={{ fontWeight: 600 }}>{item.error.code || 'Error'}: {item.error.message}</div>
+                      {item.error.details && <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', marginTop: 4, opacity: 0.85 }}>{item.error.details}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -426,10 +479,11 @@ function MainApp() {
   const [toasts, setToasts] = useState([]);
   const [history, setHistory] = useState(() => getOperationHistory());
 
-  // Stale Lock / Crash Recovery Banner
-  const [staleLock, setStaleLock] = useState(false);
+  // Stale Lock / Crash Recovery Status
+  const [lockStatus, setLockStatus] = useState({ hasLock: false, isLockStale: false, message: '' });
 
-  // Active install / update state (Synchronized with backend state machine)
+  // Active Operation State (Authoritative model from backend)
+  const [activeOpId, setActiveOpId] = useState(null);
   const [activePkg, setActivePkg] = useState('');
   const [activeAction, setActiveAction] = useState('install');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -463,16 +517,56 @@ function MainApp() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
   }, []);
 
-  // Startup Recovery & Initial Packages Load
+  // Startup Recovery & Reconnection Check
   useEffect(() => {
     refreshPackages();
 
-    // Check for crash recovery / stale lock
-    checkRecovery().then(({ isLockStale }) => {
-      if (isLockStale) {
-        setStaleLock(true);
+    // 1. Check for crash recovery / lock status
+    checkRecovery().then((res) => {
+      setLockStatus(res);
+      if (res.isLockStale) {
         addToast('Stale database lock detected from an interrupted operation.', 'warning');
+      } else if (res.hasLock && !res.isLockStale) {
+        addToast('Pacman database is currently active in another process.', 'warning');
       }
+    });
+
+    // 2. Check for active running operation on backend (e.g. after page refresh)
+    getActiveOperation().then(({ activeOperation }) => {
+      if (activeOperation && ['resolving', 'downloading', 'building', 'installing'].includes(activeOperation.state)) {
+        setActiveOpId(activeOperation.id);
+        setActivePkg(activeOperation.pkg);
+        setActiveAction(activeOperation.action);
+        setIsProcessing(true);
+        setOpState(activeOperation.state);
+        setMetrics(activeOperation.metrics || {});
+        setTermLogs(activeOperation.logs || []);
+        addToast(`Reconnected to active ${activeOperation.action} for ${activeOperation.pkg}`, 'info');
+
+        // Re-subscribe to live SSE stream
+        streamInstall(activeOperation.pkg, activeOperation.action, {
+          opId: activeOperation.id,
+          onLog: (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
+          onStateChange: (event) => {
+            setOpState(event.state);
+            if (event.error) setLastError(event.error);
+          },
+          onMetrics: (m) => setMetrics(m),
+          onDone: (ok, error, finalStatus) => {
+            setIsProcessing(false);
+            const status = finalStatus || (ok ? 'completed' : 'failed');
+            setOpState(status);
+            setActiveOpId(null);
+            refreshPackages();
+            getServerOperationHistory().then(({ history: h }) => setHistory(h || []));
+          },
+        });
+      }
+    });
+
+    // 3. Load authoritative server operation history
+    getServerOperationHistory().then(({ history: h }) => {
+      if (h && h.length > 0) setHistory(h);
     });
 
     getMultiplePackageInfo(DISCOVERY_POPULAR_CANDIDATES).then(pkgs => {
@@ -529,7 +623,7 @@ function MainApp() {
     return () => clearTimeout(searchTimer.current);
   }, [query, sortBy]);
 
-  // Run single install / remove with full state machine synchronization
+  // Run single install / remove with authoritative operation model
   const runPackageAction = useCallback((pkgName, action, onFinish) => {
     setActivePkg(pkgName);
     setActiveAction(action);
@@ -541,26 +635,24 @@ function MainApp() {
 
     streamInstall(pkgName, action, {
       onLog: (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
-      onStateChange: (event) => {
+      onStateChange: (event, opId) => {
+        if (opId) setActiveOpId(opId);
         setOpState(event.state);
         if (event.error) setLastError(event.error);
       },
       onMetrics: (m) => setMetrics(m),
-      onDone: (ok, error, finalStatus) => {
+      onDone: (ok, error, finalStatus, opId) => {
         setIsProcessing(false);
         const status = finalStatus || (ok ? 'completed' : 'failed');
         setOpState(status);
+        setActiveOpId(null);
 
         if (error) setLastError(error);
 
-        // Record in persistent operation history
-        const updatedHistory = addOperationHistory({
-          pkg: pkgName,
-          action,
-          status,
-          error: error || null,
+        // Refresh server operation history
+        getServerOperationHistory().then(({ history: h }) => {
+          if (h && h.length > 0) setHistory(h);
         });
-        setHistory(updatedHistory);
 
         if (ok) {
           setTermLogs(prev => [...prev, { text: `✓ Completed ${pkgName}`, type: 'done' }]);
@@ -635,13 +727,12 @@ function MainApp() {
   };
 
   const handleCancelInstall = async () => {
-    if (!activePkg) return;
-    const pkg = activePkg;
-    addToast(`Cancelling installation for ${pkg}…`, 'info');
-    await cancelInstall(pkg);
+    addToast('Cancelling active operation…', 'info');
+    await cancelInstall(activeOpId);
     setIsProcessing(false);
     setBatchActive(false);
     setActivePkg('');
+    setActiveOpId(null);
     setOpState('cancelled');
     addToast('Installation cancelled. No changes made.', 'info');
     refreshPackages();
@@ -651,10 +742,10 @@ function MainApp() {
     addToast('Unlocking pacman database…', 'info');
     const res = await unlockPacman();
     if (res.ok) {
-      setStaleLock(false);
+      setLockStatus({ hasLock: false, isLockStale: false, message: '' });
       addToast('Pacman database unlocked successfully.', 'success');
     } else {
-      addToast('Failed to unlock database.', 'error');
+      addToast(res.message || 'Failed to unlock database.', 'error');
     }
   };
 
@@ -733,11 +824,11 @@ function MainApp() {
           </div>
         </div>
 
-        {/* Stale Lock Recovery Banner */}
-        {staleLock && (
+        {/* Database Lock Recovery Banner (Strict Active vs Stale Distinction) */}
+        {lockStatus.hasLock && (
           <div style={{
             background: 'var(--surface-hover)',
-            borderBottom: '1px solid var(--warning)',
+            borderBottom: `1px solid ${lockStatus.isLockStale ? 'var(--warning)' : 'var(--danger)'}`,
             padding: '8px 24px',
             display: 'flex',
             alignItems: 'center',
@@ -745,21 +836,27 @@ function MainApp() {
             fontSize: 12.5,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠ Stale Database Lock</span>
-              <span style={{ color: 'var(--text-secondary)' }}>A previous package operation did not complete cleanly.</span>
+              <span style={{ color: lockStatus.isLockStale ? 'var(--warning)' : 'var(--danger)', fontWeight: 600 }}>
+                {lockStatus.isLockStale ? '⚠ Stale Database Lock' : '🔒 Package Manager Active'}
+              </span>
+              <span style={{ color: 'var(--text-secondary)' }}>{lockStatus.message}</span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary btn-sm" onClick={handleUnlockDatabase}>
-                Clean Lock
-              </button>
-              <button className="btn btn-ghost btn-sm" onClick={() => setStaleLock(false)}>
+              {lockStatus.isLockStale ? (
+                <button className="btn btn-primary btn-sm" onClick={handleUnlockDatabase}>
+                  Clean Lock
+                </button>
+              ) : (
+                <span className="chip chip-gray" style={{ fontSize: 11 }}>Read-Only Mode</span>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={() => setLockStatus({ hasLock: false })}>
                 Dismiss
               </button>
             </div>
           </div>
         )}
 
-        {/* Top Progress Bar (Honest State Machine & Transfer Metrics) */}
+        {/* Top Progress Bar (Authoritative State Machine & Transfer Metrics) */}
         <TopProgressBar
           active={isProcessing}
           pkgName={activePkg}
