@@ -1,7 +1,7 @@
 import { formatNumber, getAppDisplayName } from '../services/aurApi';
 import AppIcon from './AppIcon';
 
-export default function AppCard({ pkg, installed, onSelect, onQuickInstall, index = 0, rank = null }) {
+export default function AppCard({ pkg, installed, onSelect, onQuickInstall, index = 0, isTopMatch = false }) {
   const isInstalled = installed.has(pkg.Name);
   const displayName = getAppDisplayName(pkg.Name);
   const isCustomName = displayName !== pkg.Name;
@@ -13,16 +13,11 @@ export default function AppCard({ pkg, installed, onSelect, onQuickInstall, inde
 
   return (
     <div
-      className="app-card"
+      className={`app-card ${isTopMatch ? 'app-card-top-match' : ''}`}
       style={{ animationDelay: `${Math.min(index * 25, 200)}ms` }}
       onClick={() => onSelect(pkg)}
     >
       <div className="card-top">
-        {rank !== null && (
-          <div className="card-rank">
-            {rank}
-          </div>
-        )}
         <AppIcon pkgName={pkg.Name} size="md" installed={isInstalled} />
         <div className="card-title-block">
           <div className="card-name">{displayName}</div>

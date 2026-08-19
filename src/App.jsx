@@ -1077,7 +1077,7 @@ function MainApp() {
                           pkg={item.package}
                           index={i}
                           installed={installed}
-                          rank={i === 0 ? '★ Best Match' : null}
+                          isTopMatch={i === 0}
                           onSelect={(pkg) => {
                             addRecentSearch(query);
                             setSelectedPkg(pkg);
