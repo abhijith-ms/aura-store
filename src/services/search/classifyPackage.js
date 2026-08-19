@@ -3,8 +3,8 @@
  *
  * Roles:
  *   - 'canonical': Top official package representing the application.
- *   - 'official_variant': Beta, Dev, Nightly, Insiders, ESR variants.
- *   - 'related': Extensions, language servers, devtools, drivers, configs, plugins.
+ *   - 'official_variant': Official Beta, Dev, Nightly, Insiders, ESR browser/app variants.
+ *   - 'related': Extensions, themes, language packs, devtools, drivers, configs, plugins.
  *   - 'general': Standard package with text match.
  */
 
@@ -17,10 +17,13 @@ const RELATED_INDICATORS = [
   'themes',
   'icon',
   'icons',
+  'i18n',
+  'l10n',
+  'langpack',
+  'language-pack',
   'langserver',
   'langservers',
   'language-server',
-  'language-pack',
   'devtools',
   'driver',
   'chromedriver',
@@ -31,6 +34,11 @@ const RELATED_INDICATORS = [
   'helper',
   'patch',
   'wallpapers',
+  'adblock',
+  'rpc',
+  'sdk',
+  'wrapper',
+  'marketplace',
 ];
 
 /**
@@ -48,35 +56,46 @@ export function classifyPackage(pkg, identity, variantTerms = []) {
     return 'general';
   }
 
-  // 1. Check Canonical Packages
+  // 1. Explicit Canonical Packages
   if (identity.canonicalPackages?.includes(pkgName)) {
     return 'canonical';
   }
 
-  // 2. Check Official Variants
+  // 2. Check for Related indicators first (themes, extensions, langpacks, devtools)
+  for (const indicator of RELATED_INDICATORS) {
+    if (pkgName.includes(`-${indicator}`) || pkgName.includes(`${indicator}-`) || pkgName.endsWith(`-${indicator}`)) {
+      return 'related';
+    }
+  }
+
+  // 3. Explicit Official Variants
   if (identity.variants?.includes(pkgName)) {
     return 'official_variant';
   }
 
-  // Check for variant suffixes if base matches canonical
+  // 4. Check for clean official variant suffixes (only for packages starting with canonical base)
   for (const canon of identity.canonicalPackages || []) {
     const base = canon.replace(/-(?:bin|git)$/, '');
-    if (pkgName.startsWith(base) && (pkgName.endsWith('-beta') || pkgName.endsWith('-dev') || pkgName.endsWith('-nightly') || pkgName.endsWith('-git') || pkgName.endsWith('-canary') || pkgName.endsWith('-insiders-bin'))) {
+    if (pkgName.startsWith(base) && (
+      pkgName === `${base}-beta` ||
+      pkgName === `${base}-beta-bin` ||
+      pkgName === `${base}-dev` ||
+      pkgName === `${base}-nightly` ||
+      pkgName === `${base}-nightly-bin` ||
+      pkgName === `${base}-git` ||
+      pkgName === `${base}-canary` ||
+      pkgName === `${base}-insiders-bin` ||
+      pkgName === `${base}-developer-edition` ||
+      pkgName === `${base}-esr` ||
+      pkgName === `${base}-esr-bin`
+    )) {
       return 'official_variant';
     }
   }
 
-  // 3. Check Related Packages (extensions, devtools, language servers, etc.)
+  // 5. Check Related Prefixes (e.g. "vscode-", "firefox-")
   if (identity.relatedPrefixes?.some(prefix => pkgName.startsWith(prefix))) {
-    // If it is not a canonical or variant package, but starts with e.g. "vscode-" or "chrome-"
     return 'related';
-  }
-
-  const desc = (pkg.Description || '').toLowerCase();
-  for (const indicator of RELATED_INDICATORS) {
-    if (pkgName.includes(`-${indicator}`) || pkgName.includes(`${indicator}-`)) {
-      return 'related';
-    }
   }
 
   return 'general';

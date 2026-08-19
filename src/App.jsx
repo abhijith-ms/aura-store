@@ -17,6 +17,7 @@ import {
 import { normalizeQuery } from './services/search/normalizeQuery';
 import { rankPackages } from './services/search/rankPackages';
 import { searchCache } from './services/search/searchCache';
+import { fetchSearchCandidates } from './services/search/fetchSearchCandidates';
 
 // Top curated candidates for Explore discovery (dynamically sorted by popularity/votes)
 const DISCOVERY_POPULAR_CANDIDATES = [
@@ -695,11 +696,11 @@ function MainApp() {
       if (candidates) {
         cacheHit = true;
       } else {
-        // 2. Fetch from AUR RPC if cache miss
+        // 2. Fetch candidates from AUR RPC if cache miss
         const controller = new AbortController();
         abortControllerRef.current = controller;
         try {
-          candidates = await searchPackages(trimmed, sortBy);
+          candidates = await fetchSearchCandidates(trimmed, sortBy);
           if (candidates && candidates.length > 0) {
             searchCache.set(normalizedKey, candidates);
           }
