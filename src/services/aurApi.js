@@ -14,7 +14,7 @@ export const getPackageInfo = async (pkg) => {
 };
 
 // Known marketing display names for major software
-const KNOWN_DISPLAY_NAMES = {
+export const KNOWN_DISPLAY_NAMES = {
   'visual-studio-code-bin': 'Visual Studio Code',
   'spotify': 'Spotify',
   'google-chrome': 'Google Chrome',

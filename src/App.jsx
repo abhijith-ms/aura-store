@@ -5,14 +5,18 @@ import PackageDetail from './components/PackageDetail';
 import TerminalDrawer from './components/TerminalDrawer';
 import TopProgressBar from './components/TopProgressBar';
 import AppIcon from './components/AppIcon';
+import CommandPalette from './components/search/CommandPalette';
 import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
   streamInstall, launchApp, cancelInstall, checkRecovery, unlockPacman,
   getActiveOperation, getServerOperationHistory,
   getOperationHistory, addOperationHistory, isLaunchable, CATEGORIES, getAppDisplayName,
-  formatNumber, timeAgo
+  formatNumber, timeAgo, KNOWN_DISPLAY_NAMES
 } from './services/aurApi';
+import { normalizeQuery } from './services/search/normalizeQuery';
+import { rankPackages } from './services/search/rankPackages';
+import { searchCache } from './services/search/searchCache';
 
 // Top curated candidates for Explore discovery (dynamically sorted by popularity/votes)
 const DISCOVERY_POPULAR_CANDIDATES = [
@@ -523,8 +527,34 @@ function MainApp() {
   const [batchList, setBatchList] = useState([]);
   const [pkgStatusMap, setPkgStatusMap] = useState({});
 
+  // Recent Searches State
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      const stored = localStorage.getItem('aura_recent_searches_v1');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const addRecentSearch = useCallback((q) => {
+    if (!q || q.trim().length < 2) return;
+    const clean = q.trim();
+    setRecentSearches(prev => {
+      const filtered = prev.filter(item => item.toLowerCase() !== clean.toLowerCase());
+      const next = [clean, ...filtered].slice(0, 8);
+      try {
+        localStorage.setItem('aura_recent_searches_v1', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const searchInputRef = useRef(null);
   const searchTimer = useRef(null);
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
 
   // Refresh package metadata
   const refreshPackages = useCallback(() => {
@@ -609,9 +639,12 @@ function MainApp() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         searchInputRef.current?.focus();
+        setPaletteOpen(true);
       }
       if (e.key === 'Escape') {
-        if (selectedPkg) {
+        if (paletteOpen) {
+          setPaletteOpen(false);
+        } else if (selectedPkg) {
           setSelectedPkg(null);
         } else if (query) {
           setQuery('');
@@ -620,7 +653,7 @@ function MainApp() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedPkg, query]);
+  }, [paletteOpen, selectedPkg, query]);
 
   // Category packages load
   useEffect(() => {
@@ -634,18 +667,74 @@ function MainApp() {
     }
   }, [view]);
 
-  // Debounced search
+  // Deterministic Debounced Search (500ms, Cache, Lexicographical Ranking, AbortController)
   useEffect(() => {
     clearTimeout(searchTimer.current);
-    if (!query.trim()) { setResults([]); return; }
-    searchTimer.current = setTimeout(async () => {
-      setLoading(true);
-      const res = await searchPackages(query, sortBy).catch(() => []);
-      setResults(res.slice(0, 60));
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
       setLoading(false);
-    }, 280);
+      return;
+    }
+
+    const thisRequestId = ++requestIdRef.current;
+    const normalizedKey = normalizeQuery(trimmed).normalizedQuery;
+
+    searchTimer.current = setTimeout(async () => {
+      const startTime = performance.now();
+      setLoading(true);
+
+      // 1. Check local search cache for raw candidate packages
+      let candidates = searchCache.get(normalizedKey);
+      let cacheHit = false;
+
+      if (candidates) {
+        cacheHit = true;
+      } else {
+        // 2. Fetch from AUR RPC if cache miss
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        try {
+          candidates = await searchPackages(trimmed, sortBy);
+          if (candidates && candidates.length > 0) {
+            searchCache.set(normalizedKey, candidates);
+          }
+        } catch {
+          if (thisRequestId === requestIdRef.current) {
+            setLoading(false);
+            setResults([]);
+          }
+          return;
+        }
+      }
+
+      // Stale search response check (ignore if newer request exists)
+      if (thisRequestId !== requestIdRef.current) return;
+
+      // 3. Deterministic relevance ranking using current installed set and known display names
+      const rankStartTime = performance.now();
+      const ranked = rankPackages(candidates || [], trimmed, {
+        installedPackages: installed,
+        knownDisplayNames: KNOWN_DISPLAY_NAMES,
+      });
+      const rankTime = performance.now() - rankStartTime;
+      const totalTime = performance.now() - startTime;
+
+      // 4. Local dev telemetry diagnostics
+      if (import.meta.env.DEV) {
+        console.log(`[Aura Search] Query: "${trimmed}" | Candidates: ${candidates?.length || 0} | Cache: ${cacheHit ? 'HIT' : 'MISS'} | Ranking: ${rankTime.toFixed(1)}ms | Total: ${totalTime.toFixed(1)}ms | Top match: ${ranked[0]?.package?.Name || 'none'} (${ranked[0]?.matchReason || 'none'})`);
+      }
+
+      setResults(ranked);
+      setLoading(false);
+    }, 500); // 500ms debounce per spec
+
     return () => clearTimeout(searchTimer.current);
-  }, [query, sortBy]);
+  }, [query, sortBy, installed]);
 
   // Run single install / remove with authoritative operation model
   const runPackageAction = useCallback((pkgName, action, onFinish) => {
@@ -813,7 +902,7 @@ function MainApp() {
       <div className="main">
         {/* Header with Adaptive Controls */}
         <div className="header">
-          <div className="search-wrapper">
+          <div className="search-wrapper" style={{ position: 'relative' }}>
             <span className="search-icon">⌕</span>
             <input
               ref={searchInputRef}
@@ -821,12 +910,49 @@ function MainApp() {
               type="text"
               placeholder="Search AUR packages, apps, developers... (Ctrl K)"
               value={query}
+              onFocus={() => setPaletteOpen(true)}
               onChange={e => {
                 setQuery(e.target.value);
+                setPaletteOpen(true);
                 if (selectedPkg) setSelectedPkg(null);
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  if (e.ctrlKey || e.metaKey) {
+                    setPaletteOpen(false);
+                    if (query.trim()) addRecentSearch(query);
+                  } else if (results.length > 0) {
+                    addRecentSearch(query);
+                    setSelectedPkg(results[0].package);
+                    setPaletteOpen(false);
+                  }
+                }
               }}
             />
             {!query && <span className="search-shortcut">Ctrl K</span>}
+
+            <CommandPalette
+              results={results}
+              visible={paletteOpen}
+              installed={installed}
+              onSelect={(pkg) => {
+                addRecentSearch(query || pkg.Name);
+                setSelectedPkg(pkg);
+                setPaletteOpen(false);
+              }}
+              onViewAll={() => {
+                addRecentSearch(query);
+                setPaletteOpen(false);
+              }}
+              onClose={() => setPaletteOpen(false)}
+              loading={loading}
+              query={query}
+              recentSearches={recentSearches}
+              onRecentClick={(rq) => {
+                setQuery(rq);
+                setPaletteOpen(true);
+              }}
+            />
           </div>
 
           <div className="header-actions">
@@ -931,22 +1057,62 @@ function MainApp() {
               ) : results.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">🔍</div>
-                  <div className="empty-title">No packages found</div>
-                  <div className="empty-desc">Try a different search term or check the package spelling.</div>
+                  <div className="empty-title">No packages found for "{query}"</div>
+                  <div className="empty-desc">Try a shorter package name, the application's name, or a related keyword.</div>
                 </div>
               ) : (
-                <div className="app-grid">
-                  {results.map((pkg, i) => (
-                    <AppCard
-                      key={pkg.Name}
-                      pkg={pkg}
-                      index={i}
-                      installed={installed}
-                      onSelect={setSelectedPkg}
-                      onQuickInstall={handleQuickInstall}
-                    />
-                  ))}
-                </div>
+                <>
+                  {/* Best Matches Rail (Top 4) */}
+                  <div style={{ marginBottom: results.length > 4 ? 24 : 0 }}>
+                    {results.length > 4 && (
+                      <div className="section-header" style={{ marginBottom: 10 }}>
+                        <div className="section-title" style={{ fontSize: 13, color: 'var(--accent)' }}>Best Matches</div>
+                        <div className="section-count">Top relevance</div>
+                      </div>
+                    )}
+                    <div className="app-grid popular-grid">
+                      {results.slice(0, 4).map((item, i) => (
+                        <AppCard
+                          key={item.package.Name}
+                          pkg={item.package}
+                          index={i}
+                          installed={installed}
+                          rank={i === 0 ? '★ Best Match' : null}
+                          onSelect={(pkg) => {
+                            addRecentSearch(query);
+                            setSelectedPkg(pkg);
+                          }}
+                          onQuickInstall={handleQuickInstall}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Other Results (Remaining) */}
+                  {results.length > 4 && (
+                    <div>
+                      <div className="section-header" style={{ marginBottom: 10 }}>
+                        <div className="section-title" style={{ fontSize: 13 }}>Other Results</div>
+                        <div className="section-count">{results.length - 4} more packages</div>
+                      </div>
+                      <div className="app-grid">
+                        {results.slice(4).map((item, i) => (
+                          <AppCard
+                            key={item.package.Name}
+                            pkg={item.package}
+                            index={i + 4}
+                            installed={installed}
+                            onSelect={(pkg) => {
+                              addRecentSearch(query);
+                              setSelectedPkg(pkg);
+                            }}
+                            onQuickInstall={handleQuickInstall}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ) : view === 'explore' ? (
