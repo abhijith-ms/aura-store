@@ -2,7 +2,7 @@
 
 > **A modern, intelligent, Linux-native software center for Arch Linux and the Arch User Repository (AUR).**
 
-Aura bridges the gap between raw package managers (`pacman`, `paru`, `yay`) and modern desktop app store UX. It replaces text-dump terminal helpers and generic web wrappers with an authoritative, process-backed runtime, deterministic application identity search, and deep native desktop integration.
+Aura bridges the gap between raw package managers (`pacman`, `paru`, `yay`) and modern desktop app store UX. It replaces text-dump terminal helpers and generic web wrappers with an authoritative, process-backed runtime, deterministic application identity search, repository-aware package inspection, and deep native desktop integration.
 
 ---
 
@@ -12,10 +12,12 @@ Aura bridges the gap between raw package managers (`pacman`, `paru`, `yay`) and 
    * Aura never simulates or fakes package states. Progress bars and status badges strictly reflect real-time sub-process output and system state (`pacman -Q`).
 2. **Deterministic Intent Resolution (No Black-Box AI in the Critical Path):**
    * Search understands what application you mean (e.g. `chrome` $\rightarrow$ `google-chrome`, `vscode` $\rightarrow$ `visual-studio-code-bin`), prioritizing exact canonical identity over popularity while keeping natural categories broad.
-3. **Robust System Safety & Lifecycle Integrity:**
+3. **Repository Awareness & Pure Package Normalization:**
+   * Clean separation between Application Display Identity, Package Name, and Source Repositories (`AUR`, extensible to official Arch repos).
+4. **Robust System Safety & Lifecycle Integrity:**
    * Process-tree signal group handling (`SIGTERM`/`SIGKILL`), mutual exclusion on system-mutating operations, safe stale lock detection, and seamless SSE reconnection across renderer crashes or browser refreshes.
-4. **Linux-Native Application Feel:**
-   * Direct inspection of system XDG `.desktop` entries to distinguish launchable GUI applications from CLI utilities and libraries, showing `[ Open ]` only when valid executables exist.
+5. **Linux-Native Application Feel:**
+   * Direct inspection of system XDG `.desktop` entries to distinguish launchable GUI applications from CLI utilities and libraries, showing `[ Open ]` or `[ Open ▾ ]` only when valid executables exist.
 
 ---
 
@@ -36,7 +38,9 @@ v3.3  ── Intelligent Search & Command Palette (Lexicographical ranking, 500m
   ↓
 v3.3.1 ── Application Identity & Package Classification (Alias registry, extension demotion)
   ↓
-v3.3.2 ── Real-World Search Benchmark (100% accuracy on live AUR regression matrix) [CURRENT]
+v3.3.2 ── Real-World Search Benchmark (100% accuracy on live AUR regression matrix)
+  ↓
+v3.4  ── Package Experience & Repository Awareness (Pure view model, source badges, dependency stack) [CURRENT]
 ```
 
 ---
@@ -47,8 +51,9 @@ v3.3.2 ── Real-World Search Benchmark (100% accuracy on live AUR regression 
 ┌────────────────────────────────────────────────────────────────────────┐
 │                          AURA FRONTEND (React)                         │
 │  • Command Palette (Ctrl+K)   • Explore / Curated Rails                │
-│  • Installed Library          • Category Browsers & Updates            │
-│  • Real-time SSE Stream Logs  • Structured Verification Badges         │
+│  • Package Experience (v3.4)  • Category Browsers & Updates            │
+│  • Installed Library          • Structured Verification Badges         │
+│  • Real-time SSE Stream Logs  • Dependency Navigation Stack            │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ HTTP / EventSource (SSE)
 ┌───────────────────────────────────▼────────────────────────────────────┐
@@ -61,6 +66,39 @@ v3.3.2 ── Real-World Search Benchmark (100% accuracy on live AUR regression 
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                      ARCH LINUX SYSTEM BACKEND                         │
 │  • pacman  • paru / yay  • makepkg  • pkexec  • gtk-launch / XDG       │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📦 Package Experience & View Model Architecture (v3.4)
+
+Aura employs a pure, immutable normalization layer (`packageViewModel.js`) that transforms raw AUR/system data into an authoritative contract:
+
+```text
+Raw AUR Metadata + System State (pacman -Q, desktopEntriesMap, operations)
+                                  ↓
+                  createPackageViewModel(pkg, context)
+                                  ↓
+┌────────────────────────────────────────────────────────────────────────┐
+│                        NORMALIZED VIEW MODEL                           │
+│  • identity:       Application Name vs Technical Package Name          │
+│  • source:         { type: 'aur', label: 'AUR', fullName: '...' }      │
+│  • classification: 'Main package' | 'Variant' | 'Related package'      │
+│  • upstream:       { homepage, source (PKGBUILD), aur }                │
+│  • dependencies:   runtime (Depends), make, optional, check (accurate) │
+│  • launch:         isLaunchable, desktopEntries[]                      │
+│  • state:          installed, updateAvailable, launchable, operation   │
+└────────────────────────────────────────────────────────────────────────┘
+                                  ↓
+┌────────────────────────────────────────────────────────────────────────┐
+│                      PACKAGE DETAIL SCREEN (React)                     │
+│  • Above-the-fold Hero + Ambient Accent Glow                           │
+│  • Clear Source & Classification Pills                                 │
+│  • Structured Dependencies with Installed Indicators (✓)               │
+│  • Deep Navigation Stack (Package A → Dependency B → Back → Package A) │
+│  • Lightweight Install Review Dialog (Expandable Details)              │
+│  • Build Transparency Notice & Collapsible PKGBUILD Viewer             │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -90,17 +128,19 @@ Command Palette (Top 6)  /  Full Grid View (Best Matches + Other Results)
 
 ## 🧪 Automated Test & Verification Suite
 
-Aura maintains a comprehensive multi-tier test suite (**130 / 130 passing assertions**):
+Aura maintains a comprehensive multi-tier test suite (**158 / 158 passing assertions**):
 
-| Suite | File | Tests | Purpose |
+| Suite | File | Assertions | Purpose |
 |---|---|---|---|
-| **Live Search Benchmark** | `tests/search.benchmark.js` | **18 / 18 PASS (100%)** | Real queries against live AUR candidates (`chrome`, `vscode`, `firefox`, `discord`, `code`, `music player`) |
-| **Identity & Intent Unit** | `tests/search.identity.test.js` | **22 / 22 PASS** | Alias resolution, variant queries, extension demotion, and ambiguity protection |
+| **Package View Model & Experience** | `tests/package.test.js` | **28 / 28 PASS** | Source awareness, pure transformations, dependency parsing, and state resolution |
 | **Search Core Unit** | `tests/search.test.js` | **27 / 27 PASS** | Normalization, primary/secondary sorting, LRU cache eviction and TTL |
+| **Identity & Intent Unit** | `tests/search.identity.test.js` | **22 / 22 PASS** | Alias resolution, variant queries, extension demotion, and ambiguity protection |
+| **Live Search Benchmark** | `tests/search.benchmark.js` | **18 / 18 PASS (100%)** | Real queries against live AUR candidates (`chrome`, `vscode`, `firefox`, `discord`, `code`, `music player`) |
 | **Adversarial Runtime** | `tests/adversarial.test.js` | **63 / 63 PASS** | Concurrency conflict (HTTP 409), process cancellation, lock safety, memory bounds, verification invariants |
 
 To run all validation suites:
 ```bash
+node tests/package.test.js
 node tests/search.test.js
 node tests/search.identity.test.js
 node tests/search.benchmark.js
