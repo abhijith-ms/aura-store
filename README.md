@@ -223,8 +223,8 @@ Visit **[http://localhost:5173](http://localhost:5173)** to use Aura Store.
 * [x] **v3.5** — Installation UX & In-App Sudo Authentication (Askpass bridge, themed AuthModal, error hardening)
 * [x] **v3.6** — Deep Native Desktop & Multi-Entry Integration (ownership-verified via `pacman -Qlq`, Desktop Actions, grid Open button)
 * [x] **v3.6.1** — Icon Theme Resolution (`Icon=` field + XDG hicolor lookup & backend streaming API)
-* [ ] **v3.7** — Minimal Preferences & Settings
+* [ ] **v3.7** — Settings & Storage Maintenance (AUR helper selection, automatic & manual Cache Cleaner for `~/.cache/paru|yay` & `/var/cache/pacman`, Orphan package cleaner `pacman -Qtdq`, theme preferences)
 * [ ] **v4.0** — Native App Packaging (Standalone binary, `.desktop` entry, icon distribution)
 * [ ] **v4.1** — Real Arch User Testing & Feedback Loop
 * [ ] **v4.2** — Public Release
-* [ ] **v5.0** — Multi-Source Ecosystem (Official Arch Repositories, Flathub/Flatpak & AppImage integration)
+* [ ] **v5.0** — Universal Multi-Source Ecosystem (Official Arch Repositories, Flathub/Flatpak, AppImageHub, Chaotic-AUR & GitHub Releases)
