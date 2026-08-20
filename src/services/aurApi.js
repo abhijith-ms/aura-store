@@ -268,7 +268,7 @@ export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
       const msg = JSON.parse(e.data);
       if (msg.type === 'done') {
         es.close();
-        const success = msg.data?.status === 'success' || msg.data === 'success';
+        const success = msg.data?.status === 'completed' || msg.data?.status === 'success' || msg.data === 'success';
         const error = msg.data?.error || null;
         if (onDone) onDone(success, error, msg.data?.status, msg.opId);
       } else if (msg.type === 'state_change') {
