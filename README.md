@@ -227,3 +227,4 @@ Visit **[http://localhost:5173](http://localhost:5173)** to use Aura Store.
 * [ ] **v4.0** — Native App Packaging (Standalone binary, `.desktop` entry, icon distribution)
 * [ ] **v4.1** — Real Arch User Testing & Feedback Loop
 * [ ] **v4.2** — Public Release
+* [ ] **v5.0** — Multi-Source Ecosystem (Official Arch Repositories, Flathub/Flatpak & AppImage integration)
