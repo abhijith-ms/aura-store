@@ -33,18 +33,34 @@ export default function AuthModal({ authRequest, onRespond }) {
   };
 
   return (
-    <div className="command-palette-backdrop" style={{ zIndex: 9999 }} onKeyDown={handleKeyDown}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0, 0, 0, 0.65)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 99999,
+        padding: 20,
+      }}
+      onClick={handleCancel}
+      onKeyDown={handleKeyDown}
+    >
       <div
         className="detail-section"
         style={{
           width: '100%',
-          maxWidth: 440,
-          margin: '12vh auto',
+          maxWidth: 450,
           background: 'var(--surface)',
-          borderColor: 'rgba(139, 92, 246, 0.4)',
-          boxShadow: '0 20px 48px rgba(0, 0, 0, 0.45), 0 0 24px rgba(139, 92, 246, 0.2)',
+          border: '1px solid rgba(139, 92, 246, 0.4)',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.55), 0 0 32px rgba(139, 92, 246, 0.25)',
           borderRadius: 'var(--radius-lg)',
-          padding: 24,
+          padding: 28,
           animation: 'fadeIn 0.15s ease-out',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -52,8 +68,8 @@ export default function AuthModal({ authRequest, onRespond }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
           <div
             style={{
-              width: 44,
-              height: 44,
+              width: 46,
+              height: 46,
               borderRadius: 'var(--radius-md)',
               background: 'var(--accent-subtle)',
               border: '1px solid rgba(139, 92, 246, 0.35)',
@@ -61,12 +77,13 @@ export default function AuthModal({ authRequest, onRespond }) {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: 22,
+              flexShrink: 0,
             }}
           >
             🔒
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
+            <div style={{ fontWeight: 700, fontSize: 16.5, color: 'var(--text-primary)' }}>
               Authentication Required
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>
@@ -75,12 +92,12 @@ export default function AuthModal({ authRequest, onRespond }) {
           </div>
         </div>
 
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 18px 0' }}>
           {authRequest.prompt || 'Aura needs permission to install packages and modify system files.'}
         </p>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ position: 'relative', marginBottom: 20 }}>
+          <div style={{ position: 'relative', marginBottom: 22 }}>
             <input
               ref={inputRef}
               type={showPassword ? 'text' : 'password'}
