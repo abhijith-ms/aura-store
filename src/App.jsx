@@ -499,6 +499,7 @@ function MainApp() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState(null);
+  const [pkgStack, setPkgStack] = useState([]);
   const [installed, setInstalled] = useState(new Set());
   const [aurInstalled, setAurInstalled] = useState([]);
   const [updates, setUpdates] = useState([]);
@@ -645,6 +646,10 @@ function MainApp() {
       if (e.key === 'Escape') {
         if (paletteOpen) {
           setPaletteOpen(false);
+        } else if (pkgStack.length > 0) {
+          const prev = pkgStack[pkgStack.length - 1];
+          setPkgStack(s => s.slice(0, -1));
+          setSelectedPkg(prev);
         } else if (selectedPkg) {
           setSelectedPkg(null);
         } else if (query) {
@@ -654,7 +659,7 @@ function MainApp() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [paletteOpen, selectedPkg, query]);
+  }, [paletteOpen, selectedPkg, pkgStack, query]);
 
   // Category packages load
   useEffect(() => {
@@ -873,9 +878,13 @@ function MainApp() {
     setLoading(true);
     const info = await getPackageInfo(depName);
     if (info) {
+      if (selectedPkg) {
+        setPkgStack(prev => [...prev, selectedPkg]);
+      }
       setSelectedPkg(info);
     } else {
       setQuery(depName);
+      setPkgStack([]);
       setSelectedPkg(null);
     }
     setLoading(false);
@@ -884,6 +893,7 @@ function MainApp() {
   const handleNav = (id) => {
     setView(id);
     setSelectedPkg(null);
+    setPkgStack([]);
     setQuery('');
   };
 
@@ -1030,11 +1040,21 @@ function MainApp() {
             <PackageDetail
               pkg={selectedPkg}
               installed={installed}
+              updates={updates}
+              aurInstalledList={aurInstalled}
               isInstalling={isProcessing && activePkg === selectedPkg.Name}
               opState={opState}
               lastError={lastError}
               installLogs={termLogs}
-              onBack={() => setSelectedPkg(null)}
+              onBack={() => {
+                if (pkgStack.length > 0) {
+                  const prev = pkgStack[pkgStack.length - 1];
+                  setPkgStack(s => s.slice(0, -1));
+                  setSelectedPkg(prev);
+                } else {
+                  setSelectedPkg(null);
+                }
+              }}
               onInstallStart={(pkg, action) => runPackageAction(pkg, action)}
               onCancel={handleCancelInstall}
               onLaunch={handleLaunchApp}

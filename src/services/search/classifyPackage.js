@@ -8,6 +8,8 @@
  *   - 'general': Standard package with text match.
  */
 
+import { APPLICATION_IDENTITIES } from './applicationAliases.js';
+
 const RELATED_INDICATORS = [
   'extension',
   'extensions',
@@ -45,19 +47,35 @@ const RELATED_INDICATORS = [
  * Classify a package relative to a resolved identity and query.
  *
  * @param {object} pkg - AUR package object
- * @param {object|null} identity - Resolved identity from resolveQueryIdentity
- * @param {string[]} variantTerms - Variant terms present in query
+ * @param {object|null} [identity=null] - Resolved identity from resolveQueryIdentity
+ * @param {string[]} [variantTerms=[]] - Variant terms present in query
  * @returns {'canonical' | 'official_variant' | 'related' | 'general'}
  */
-export function classifyPackage(pkg, identity, variantTerms = []) {
+export function classifyPackage(pkg, identity = null, variantTerms = []) {
   const pkgName = (pkg.Name || '').toLowerCase();
 
-  if (!identity) {
+  let targetIdentity = identity;
+
+  // If no query identity was passed, look up identity by package name in the identity registry
+  if (!targetIdentity) {
+    for (const id of APPLICATION_IDENTITIES) {
+      if (
+        id.canonicalPackages?.includes(pkgName) ||
+        id.variants?.includes(pkgName) ||
+        id.relatedPrefixes?.some(p => pkgName.startsWith(p))
+      ) {
+        targetIdentity = id;
+        break;
+      }
+    }
+  }
+
+  if (!targetIdentity) {
     return 'general';
   }
 
   // 1. Explicit Canonical Packages
-  if (identity.canonicalPackages?.includes(pkgName)) {
+  if (targetIdentity.canonicalPackages?.includes(pkgName)) {
     return 'canonical';
   }
 
@@ -69,12 +87,12 @@ export function classifyPackage(pkg, identity, variantTerms = []) {
   }
 
   // 3. Explicit Official Variants
-  if (identity.variants?.includes(pkgName)) {
+  if (targetIdentity.variants?.includes(pkgName)) {
     return 'official_variant';
   }
 
   // 4. Check for clean official variant suffixes (only for packages starting with canonical base)
-  for (const canon of identity.canonicalPackages || []) {
+  for (const canon of targetIdentity.canonicalPackages || []) {
     const base = canon.replace(/-(?:bin|git)$/, '');
     if (pkgName.startsWith(base) && (
       pkgName === `${base}-beta` ||
@@ -94,7 +112,7 @@ export function classifyPackage(pkg, identity, variantTerms = []) {
   }
 
   // 5. Check Related Prefixes (e.g. "vscode-", "firefox-")
-  if (identity.relatedPrefixes?.some(prefix => pkgName.startsWith(prefix))) {
+  if (targetIdentity.relatedPrefixes?.some(prefix => pkgName.startsWith(prefix))) {
     return 'related';
   }
 

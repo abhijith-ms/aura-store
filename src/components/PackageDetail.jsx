@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react';
-import { getPkgbuild, formatNumber, timeAgo, getAppDisplayName, isLaunchable, openDownloadsFolder, unlockPacman } from '../services/aurApi';
+import { getPkgbuild, openDownloadsFolder, unlockPacman } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
+import { createPackageViewModel } from '../services/packageViewModel';
 import AppIcon from './AppIcon';
 
 export default function PackageDetail({
   pkg,
   installed,
+  updates = [],
+  aurInstalledList = [],
   isInstalling = false,
   opState = 'idle',
   lastError = null,
@@ -23,11 +26,22 @@ export default function PackageDetail({
   const [pkgbuildLoading, setPkgbuildLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmingInstall, setConfirmingInstall] = useState(false);
+  const [showReviewDetails, setShowReviewDetails] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState(false);
 
-  const isInstalled = installed.has(pkg.Name);
-  const displayName = getAppDisplayName(pkg.Name);
-  const brandColor = getPackageBrandColor(pkg.Name);
-  const canLaunch = isLaunchable(pkg.Name);
+  // Normalize raw package object into authoritative view model
+  const vm = useMemo(() => {
+    return createPackageViewModel(pkg, {
+      installedPackages: installed,
+      updates,
+      aurInstalledList,
+      activeOperation: isInstalling ? { pkg: pkg?.Name, state: opState } : null,
+    });
+  }, [pkg, installed, updates, aurInstalledList, isInstalling, opState]);
+
+  const brandColor = useMemo(() => {
+    return pkg?.Name ? getPackageBrandColor(pkg.Name) : 'var(--accent)';
+  }, [pkg]);
 
   // Map backend operation state to 4-stage stepper
   const stage = useMemo(() => {
@@ -39,10 +53,29 @@ export default function PackageDetail({
     return 1;
   }, [isInstalling, opState]);
 
+  if (!vm) {
+    return (
+      <div className="detail-page">
+        <button className="detail-back-btn" onClick={onBack} title="Back (Esc)">
+          <span>←</span>
+          <span>Back</span>
+        </button>
+        <div className="empty-state" style={{ marginTop: 40 }}>
+          <div className="empty-icon">📦</div>
+          <div className="empty-title">Package unavailable</div>
+          <div className="empty-desc">Package information is currently missing or could not be loaded.</div>
+          <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={onBack}>
+            Back to previous view
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const togglePkgbuild = async () => {
     if (!showPkgbuild && !pkgbuild) {
       setPkgbuildLoading(true);
-      const text = await getPkgbuild(pkg.Name);
+      const text = await getPkgbuild(vm.name);
       setPkgbuild(text);
       setPkgbuildLoading(false);
     }
@@ -60,11 +93,11 @@ export default function PackageDetail({
 
   const handleConfirmedInstall = () => {
     setConfirmingInstall(false);
-    onInstallStart(pkg.Name, 'install');
+    onInstallStart(vm.name, vm.state.updateAvailable ? 'update' : 'install');
   };
 
   const handleRemove = () => {
-    onInstallStart(pkg.Name, 'remove');
+    onInstallStart(vm.name, 'remove');
   };
 
   const handleOpenDownloads = async () => {
@@ -77,14 +110,13 @@ export default function PackageDetail({
     const res = await unlockPacman();
     if (res.ok) {
       addToast('Lock removed. Retrying build…', 'success');
-      onInstallStart(pkg.Name, 'install');
+      onInstallStart(vm.name, 'install');
     } else {
       addToast('Failed to remove lock. Sudo permissions required.', 'error');
     }
   };
 
-  const deps = pkg.Depends || [];
-  const optDeps = pkg.OptDepends || [];
+  const { runtime: deps, make: makeDeps, optional: optDeps, check: checkDeps } = vm.dependencies;
 
   return (
     <div className="detail-page" style={{ '--package-accent': brandColor || 'var(--accent)' }}>
@@ -99,32 +131,42 @@ export default function PackageDetail({
         <div className="detail-ambient-glow" />
 
         <div className="detail-hero-header">
-          <AppIcon pkgName={pkg.Name} size="hero" installed={isInstalled} />
+          <AppIcon pkgName={vm.name} size="hero" installed={vm.state.installed} />
           <div className="detail-hero-meta">
-            <div className="detail-name">{displayName}</div>
-            <div className="detail-pkgname">{pkg.Name} · v{pkg.Version}</div>
-            <div className="detail-desc">{pkg.Description || 'No description provided in the AUR.'}</div>
+            <div className="detail-name">{vm.displayName}</div>
+            <div className="detail-pkgname">
+              {vm.name} {vm.metadata.version ? `· v${vm.metadata.version}` : ''}
+            </div>
+            <div className="detail-desc">{vm.description || 'No description provided.'}</div>
 
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-              {isInstalled && <span className="chip chip-green">✓ Installed</span>}
-              {pkg.OutOfDate && <span className="chip chip-orange">⚠ Out of Date in AUR</span>}
-              {pkg.Popularity > 5 && <span className="chip chip-indigo">★ Popular</span>}
-              {pkg.License?.map(l => <span key={l} className="chip chip-gray">{l}</span>)}
+            {/* Source & Classification Badges */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
+              <span className="chip chip-purple" title={vm.source.fullName}>
+                {vm.source.label}
+              </span>
+              {vm.classification.role !== 'general' && (
+                <span className="chip chip-gray" title={`Classification: ${vm.classification.label}`}>
+                  {vm.classification.label}
+                </span>
+              )}
+              {vm.state.installed && <span className="chip chip-green">✓ Installed</span>}
+              {vm.state.updateAvailable && <span className="chip chip-indigo">Update available</span>}
+              {vm.metadata.outOfDate && <span className="chip chip-orange">⚠ Out of date in AUR</span>}
             </div>
           </div>
         </div>
 
-        {/* Hero Actions & Stats */}
+        {/* Hero Actions & Community Stats */}
         <div className="detail-hero-actions">
           <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
               <span style={{ color: 'var(--warning)', fontWeight: 600 }}>★</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatNumber(pkg.NumVotes)}</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.votesFormatted}</span>
               <span>votes</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
               <span>📈</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{pkg.Popularity ? pkg.Popularity.toFixed(1) : '0'}</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.popularity}</span>
               <span>popularity</span>
             </div>
           </div>
@@ -147,20 +189,65 @@ export default function PackageDetail({
                   Logs
                 </button>
               </div>
-            ) : isInstalled ? (
-              <>
-                {canLaunch && (
-                  <button className="btn btn-primary btn-lg" onClick={() => onLaunch(pkg.Name, displayName)}>
-                    Open {displayName}
+            ) : vm.state.installed ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
+                {vm.state.updateAvailable && (
+                  <button className="btn btn-primary btn-lg" onClick={() => setConfirmingInstall(true)}>
+                    Update to v{vm.metadata.version}
                   </button>
+                )}
+                {vm.state.launchable && (
+                  vm.launch.desktopEntries.length > 1 ? (
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        className="btn btn-primary btn-lg"
+                        onClick={() => setOpenDropdown(o => !o)}
+                      >
+                        Open ▾
+                      </button>
+                      {openDropdown && (
+                        <div
+                          className="command-palette"
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            right: 0,
+                            marginTop: 6,
+                            minWidth: 200,
+                            zIndex: 100,
+                          }}
+                        >
+                          {vm.launch.desktopEntries.map((entry, idx) => (
+                            <div
+                              key={idx}
+                              className="palette-result"
+                              onClick={() => {
+                                setOpenDropdown(false);
+                                onLaunch(vm.name, entry.name, entry.filename);
+                              }}
+                            >
+                              <div className="palette-result-name">{entry.name}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-primary btn-lg"
+                      onClick={() => onLaunch(vm.name, vm.displayName, vm.launch.desktopEntries[0]?.filename)}
+                    >
+                      Open {vm.displayName}
+                    </button>
+                  )
                 )}
                 <button className="btn btn-danger btn-lg" onClick={handleRemove}>
                   🗑 Remove
                 </button>
-              </>
+              </div>
             ) : (
               <button className="btn btn-primary btn-lg" onClick={() => setConfirmingInstall(true)}>
-                Install {displayName}
+                Install {vm.displayName}
               </button>
             )}
           </div>
@@ -205,7 +292,7 @@ export default function PackageDetail({
                 <button className="btn btn-ghost" onClick={handleOpenDownloads}>
                   Open Downloads Folder
                 </button>
-                <button className="btn btn-primary" onClick={() => onInstallStart(pkg.Name, 'install')}>
+                <button className="btn btn-primary" onClick={() => onInstallStart(vm.name, 'install')}>
                   Retry Build
                 </button>
               </div>
@@ -228,7 +315,7 @@ export default function PackageDetail({
           ) : (
             <div>
               <div className="detail-section-title">
-                <span style={{ color: 'var(--danger)' }}>✕ Couldn't Install {displayName}</span>
+                <span style={{ color: 'var(--danger)' }}>✕ Couldn't Install {vm.displayName}</span>
                 <span className="chip chip-red">{lastError.code || 'BUILD_FAILED'}</span>
               </div>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -238,7 +325,7 @@ export default function PackageDetail({
                 <button className="btn btn-ghost" onClick={onToggleTerminal}>
                   Show Terminal Logs
                 </button>
-                <button className="btn btn-primary" onClick={() => onInstallStart(pkg.Name, 'install')}>
+                <button className="btn btn-primary" onClick={() => onInstallStart(vm.name, 'install')}>
                   Retry Build
                 </button>
               </div>
@@ -247,34 +334,54 @@ export default function PackageDetail({
         </div>
       )}
 
-      {/* Confirmation Review Dialog */}
+      {/* Lightweight Installation Review Dialog */}
       {confirmingInstall && (
         <div className="detail-section" style={{ borderColor: 'var(--accent)', animation: 'fadeIn 0.15s ease' }}>
           <div className="detail-section-title">
-            <span>Review AUR Package Build</span>
-            <span className="chip chip-indigo">paru / makepkg</span>
+            <span>Install {vm.displayName}?</span>
+            <span className="chip chip-purple">{vm.source.label}</span>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            AUR packages are community-maintained recipes. Aura will build and verify this package locally on your Arch system via <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>paru</code>.
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: 'var(--surface-hover)', padding: 12, borderRadius: 'var(--radius-sm)' }}>
-            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Package:</span> <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{pkg.Name}</span></div>
-            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Version:</span> <span style={{ fontFamily: 'var(--font-mono)' }}>{pkg.Version}</span></div>
-            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Maintainer:</span> <span>{pkg.Maintainer || 'Community'}</span></div>
-            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Dependencies:</span> <span>{deps.length} required</span></div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>
+              <strong style={{ color: 'var(--text-primary)' }}>{vm.name}</strong> · v{vm.metadata.version}
+            </div>
+            <div>
+              Maintainer: <span style={{ color: 'var(--text-primary)' }}>{vm.metadata.maintainer}</span> · {deps.length} runtime dependencies
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              Aura will build and verify this package locally on your system via <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>paru</code>.
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-            <button className="btn btn-ghost" onClick={() => setConfirmingInstall(false)}>
-              Cancel
+
+          {showReviewDetails && (
+            <div style={{ marginTop: 10, padding: 10, background: 'var(--surface-hover)', borderRadius: 'var(--radius-sm)', fontSize: 12 }}>
+              <div><strong style={{ color: 'var(--text-muted)' }}>Package Base:</strong> {vm.metadata.packageBase}</div>
+              <div><strong style={{ color: 'var(--text-muted)' }}>License:</strong> {vm.metadata.license || 'None declared'}</div>
+              <div><strong style={{ color: 'var(--text-muted)' }}>Source:</strong> {vm.source.description}</div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 11.5 }}
+              onClick={() => setShowReviewDetails(d => !d)}
+            >
+              {showReviewDetails ? 'Hide details' : 'Show details ▾'}
             </button>
-            <button className="btn btn-primary" onClick={handleConfirmedInstall}>
-              Confirm & Install
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => setConfirmingInstall(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={handleConfirmedInstall}>
+                Confirm & Install
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Dependencies Section */}
+      {/* Dependencies Section (Runtime, Make, Check, Optional) */}
       <div className="detail-section">
         <div className="detail-section-title">
           <span>Dependencies</span>
@@ -282,25 +389,48 @@ export default function PackageDetail({
         </div>
 
         {deps.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {deps.map(d => (
-              <span
-                key={d}
-                className="chip chip-indigo"
-                style={{ cursor: 'pointer', padding: '4px 10px', fontSize: 12 }}
-                title={`Inspect ${d}`}
-                onClick={() => onSelectDependency && onSelectDependency(d.split(/[<>=]/)[0])}
-              >
-                {d} ↗
-              </span>
-            ))}
+          <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {deps.map(d => {
+                const cleanDep = d.split(/[<>=]/)[0];
+                const isDepInstalled = installed.has(cleanDep);
+                return (
+                  <span
+                    key={d}
+                    className={`chip ${isDepInstalled ? 'chip-green' : 'chip-indigo'}`}
+                    style={{ cursor: 'pointer', padding: '4px 10px', fontSize: 12 }}
+                    title={isDepInstalled ? `${d} (Installed on system)` : `Inspect ${d}`}
+                    onClick={() => onSelectDependency && onSelectDependency(cleanDep)}
+                  >
+                    {isDepInstalled ? `✓ ${d}` : `${d} ↗`}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         ) : (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No dependencies declared.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No runtime dependencies declared.</div>
         )}
 
+        {/* Build / Make Dependencies */}
+        {makeDeps.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, fontWeight: 600 }}>
+              Build Dependencies ({makeDeps.length})
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {makeDeps.map(d => (
+                <span key={d} className="chip chip-gray" style={{ padding: '3px 8px', fontSize: 11.5 }}>
+                  {d}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Optional Dependencies */}
         {optDeps.length > 0 && (
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, fontWeight: 600 }}>
               Optional Dependencies ({optDeps.length})
             </div>
@@ -315,48 +445,85 @@ export default function PackageDetail({
         )}
       </div>
 
-      {/* Package Information Section */}
+      {/* Package Information & Upstream Links */}
       <div className="detail-section">
         <div className="detail-section-title">Package Information</div>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {[
-            ['Package Base', pkg.PackageBase || pkg.Name],
-            ['Version', pkg.Version],
-            ['Maintainer', pkg.Maintainer || 'None (Orphaned)'],
-            ['First Submitted', timeAgo(pkg.FirstSubmitted)],
-            ['Last Updated', timeAgo(pkg.LastModified)],
-            ['License', pkg.License?.join(', ') || 'Custom / None'],
-          ].map(([label, value]) => (
-            <div className="info-row" key={label}>
-              <span className="info-label">{label}</span>
-              <span className="info-value font-mono">{value}</span>
-            </div>
-          ))}
+          <div className="info-row">
+            <span className="info-label">Source / Repository</span>
+            <span className="info-value font-mono">{vm.source.label} ({vm.source.fullName})</span>
+          </div>
 
-          {pkg.URL && (
+          <div className="info-row">
+            <span className="info-label">Package Base</span>
+            <span className="info-value font-mono">{vm.metadata.packageBase}</span>
+          </div>
+
+          {vm.metadata.version && (
             <div className="info-row">
-              <span className="info-label">Upstream URL</span>
-              <a className="info-link" href={pkg.URL} target="_blank" rel="noreferrer">{pkg.URL} ↗</a>
+              <span className="info-label">Version</span>
+              <span className="info-value font-mono">{vm.metadata.version}</span>
             </div>
           )}
 
           <div className="info-row">
-            <span className="info-label">AUR Page</span>
-            <a className="info-link" href={`https://aur.archlinux.org/packages/${pkg.Name}`} target="_blank" rel="noreferrer">
-              aur.archlinux.org/packages/{pkg.Name} ↗
-            </a>
+            <span className="info-label">Maintainer</span>
+            <span className="info-value font-mono">{vm.metadata.maintainer}</span>
           </div>
+
+          {vm.metadata.firstSubmitted && (
+            <div className="info-row">
+              <span className="info-label">First Submitted</span>
+              <span className="info-value">{vm.metadata.firstSubmitted}</span>
+            </div>
+          )}
+
+          {vm.metadata.lastModified && (
+            <div className="info-row">
+              <span className="info-label">Last Updated</span>
+              <span className="info-value">{vm.metadata.lastModified}</span>
+            </div>
+          )}
+
+          {vm.metadata.license && (
+            <div className="info-row">
+              <span className="info-label">License</span>
+              <span className="info-value">{vm.metadata.license}</span>
+            </div>
+          )}
+
+          {vm.upstream.homepage && (
+            <div className="info-row">
+              <span className="info-label">Upstream Website</span>
+              <a className="info-link" href={vm.upstream.homepage} target="_blank" rel="noreferrer">
+                {vm.upstream.homepage} ↗
+              </a>
+            </div>
+          )}
+
+          {vm.upstream.aur && (
+            <div className="info-row">
+              <span className="info-label">AUR Recipe Page</span>
+              <a className="info-link" href={vm.upstream.aur} target="_blank" rel="noreferrer">
+                aur.archlinux.org/packages/{vm.name} ↗
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Build & Source Information (PKGBUILD) */}
+      {/* Build Transparency & PKGBUILD Recipe */}
       <div className="detail-section">
         <div className="detail-section-title" style={{ cursor: 'pointer' }} onClick={togglePkgbuild}>
-          <span>Build & Source Information</span>
+          <span>Build Transparency & PKGBUILD</span>
           <button className="btn btn-ghost btn-sm">
             {showPkgbuild ? 'Hide PKGBUILD ▲' : 'Show PKGBUILD ▾'}
           </button>
         </div>
+
+        <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+          This package is built locally from its community-maintained AUR PKGBUILD recipe.
+        </p>
 
         {showPkgbuild && (
           <div style={{ marginTop: 8 }}>
