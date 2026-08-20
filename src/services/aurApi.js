@@ -252,11 +252,25 @@ export const addOperationHistory = (entry) => {
   }
 };
 
+export const submitAuthResponse = async (authId, password, cancelled = false) => {
+  try {
+    const res = await fetch(`${API}/api/auth/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ authId, password, cancelled }),
+    });
+    return res.json();
+  } catch {
+    return { ok: false, error: 'Network error submitting credentials' };
+  }
+};
+
 export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
   const isStructured = typeof callbacks === 'object';
   const onLog = isStructured ? callbacks.onLog : callbacks;
   const onStateChange = isStructured ? callbacks.onStateChange : null;
   const onMetrics = isStructured ? callbacks.onMetrics : null;
+  const onAuthRequired = isStructured ? callbacks.onAuthRequired : null;
   const onDone = isStructured ? callbacks.onDone : onDoneLegacy;
   const opIdParam = isStructured && callbacks.opId ? `&opId=${encodeURIComponent(callbacks.opId)}` : '';
 
@@ -271,6 +285,8 @@ export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
         const success = msg.data?.status === 'completed' || msg.data?.status === 'success' || msg.data === 'success';
         const error = msg.data?.error || null;
         if (onDone) onDone(success, error, msg.data?.status, msg.opId);
+      } else if (msg.type === 'auth_required') {
+        if (onAuthRequired) onAuthRequired(msg.data, msg.opId);
       } else if (msg.type === 'state_change') {
         if (onStateChange) onStateChange(msg.data, msg.opId);
       } else if (msg.type === 'metrics') {

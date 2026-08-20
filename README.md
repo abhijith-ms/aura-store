@@ -42,9 +42,11 @@ v3.3.2 ── Real-World Search Benchmark (100% accuracy on live AUR regression 
   ↓
 v3.4  ── Package Experience & Repository Awareness (Pure view model, source badges, dependency stack)
   ↓
+v3.5  ── Installation UX & In-App Sudo Authentication (Askpass bridge, themed AuthModal, error hardening) [CURRENT]
+  ↓
 v3.6  ── Deep Native Desktop & Multi-Entry Integration (Ownership-verified launch, Desktop Actions, grid Open button)
   ↓
-v3.6.1 ── Icon Theme Resolution (Icon= field extraction, XDG hicolor lookup & streaming icon API) [CURRENT]
+v3.6.1 ── Icon Theme Resolution (Icon= field extraction, XDG hicolor lookup & streaming icon API)
 ```
 
 ---
@@ -160,20 +162,22 @@ Command Palette (Top 6)  /  Full Grid View (Best Matches + Other Results)
 
 ## 🧪 Automated Test & Verification Suite
 
-Aura maintains a comprehensive multi-tier test suite (**197 / 197 passing assertions**):
+Aura maintains a comprehensive multi-tier test suite (**203 / 203 passing assertions**):
 
 | Suite | File | Assertions | Purpose |
 |---|---|---|---|
+| **In-App Sudo Auth Bridge** | `tests/auth.test.js` | **5 / 5 PASS** | Askpass script integrity, backend response queuing, user cancellation & validation |
 | **Icon Theme Resolution** | `tests/icon.test.js` | **14 / 14 PASS** | XDG icon hierarchy, size prioritization, raster/scalable precedence, and MIME types |
 | **Desktop Entry Parsing** | `tests/desktop.test.js` | **23 / 23 PASS** | `.desktop` Name/Exec/Icon extraction, GUI/Terminal/NoDisplay detection, Desktop Actions, field-code stripping |
 | **Package View Model & Experience** | `tests/package.test.js` | **28 / 28 PASS** | Source awareness, pure transformations, dependency parsing, and state resolution |
 | **Search Core Unit** | `tests/search.test.js` | **27 / 27 PASS** | Normalization, primary/secondary sorting, LRU cache eviction and TTL |
 | **Identity & Intent Unit** | `tests/search.identity.test.js` | **22 / 22 PASS** | Alias resolution, variant queries, extension demotion, and ambiguity protection |
 | **Live Search Benchmark** | `tests/search.benchmark.js` | **18 / 18 PASS (100%)** | Real queries against live AUR candidates (`chrome`, `vscode`, `firefox`, `discord`, `code`, `music player`) |
-| **Adversarial Runtime** | `tests/adversarial.test.js` | **65 / 65 PASS** | Concurrency conflict (HTTP 409), process cancellation, lock safety, memory bounds, verification invariants |
+| **Adversarial Runtime** | `tests/adversarial.test.js` | **66 / 66 PASS** | Concurrency conflict (HTTP 409), process cancellation, lock safety, memory bounds, verification invariants |
 
 To run all validation suites:
 ```bash
+node tests/auth.test.js
 node tests/icon.test.js
 node tests/desktop.test.js
 node tests/package.test.js
@@ -216,9 +220,9 @@ Visit **[http://localhost:5173](http://localhost:5173)** to use Aura Store.
 * [x] **v3.3.1** — Application Identity & Intent Resolution
 * [x] **v3.3.2** — Live Real-World Search Benchmark & Regression Corpus
 * [x] **v3.4** — Package Detail UX & Inspection Overhaul
+* [x] **v3.5** — Installation UX & In-App Sudo Authentication (Askpass bridge, themed AuthModal, error hardening)
 * [x] **v3.6** — Deep Native Desktop & Multi-Entry Integration (ownership-verified via `pacman -Qlq`, Desktop Actions, grid Open button)
 * [x] **v3.6.1** — Icon Theme Resolution (`Icon=` field + XDG hicolor lookup & backend streaming API)
-* [ ] **v3.5** — Installation UX & Error Recovery Hardening *(deferred — GPG/disk-space/network error patterns still unhandled in `server/index.js`)*
 * [ ] **v3.7** — Minimal Preferences & Settings
 * [ ] **v4.0** — Native App Packaging (Standalone binary, `.desktop` entry, icon distribution)
 * [ ] **v4.1** — Real Arch User Testing & Feedback Loop

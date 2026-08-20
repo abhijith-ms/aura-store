@@ -6,11 +6,12 @@ import TerminalDrawer from './components/TerminalDrawer';
 import TopProgressBar from './components/TopProgressBar';
 import AppIcon from './components/AppIcon';
 import CommandPalette from './components/search/CommandPalette';
+import AuthModal from './components/AuthModal';
 import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
   streamInstall, launchApp, cancelInstall, checkRecovery, unlockPacman,
-  getActiveOperation, getServerOperationHistory,
+  getActiveOperation, getServerOperationHistory, submitAuthResponse,
   getOperationHistory, addOperationHistory, isLaunchable, CATEGORIES, getAppDisplayName,
   formatNumber, timeAgo, KNOWN_DISPLAY_NAMES
 } from './services/aurApi';
@@ -543,6 +544,7 @@ function MainApp() {
     }
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [authRequest, setAuthRequest] = useState(null);
 
   const addRecentSearch = useCallback((q) => {
     if (!q || q.trim().length < 2) return;
@@ -607,6 +609,7 @@ function MainApp() {
         streamInstall(activeOperation.pkg, activeOperation.action, {
           opId: activeOperation.id,
           onLog: (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
+          onAuthRequired: (data) => setAuthRequest(data),
           onStateChange: (event) => {
             setOpState(event.state);
             if (event.error) setLastError(event.error);
@@ -614,6 +617,7 @@ function MainApp() {
           onMetrics: (m) => setMetrics(m),
           onDone: (ok, error, finalStatus) => {
             setIsProcessing(false);
+            setAuthRequest(null);
             const status = finalStatus || (ok ? 'completed' : 'failed');
             setOpState(status);
             setActiveOpId(null);
@@ -758,6 +762,7 @@ function MainApp() {
 
     streamInstall(pkgName, action, {
       onLog: (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
+      onAuthRequired: (data) => setAuthRequest(data),
       onStateChange: (event, opId) => {
         if (opId) setActiveOpId(opId);
         setOpState(event.state);
@@ -766,6 +771,7 @@ function MainApp() {
       onMetrics: (m) => setMetrics(m),
       onDone: (ok, error, finalStatus, opId) => {
         setIsProcessing(false);
+        setAuthRequest(null);
         const status = finalStatus || (ok ? 'completed' : 'failed');
         setOpState(status);
         setActiveOpId(null);
@@ -1287,6 +1293,17 @@ function MainApp() {
         installing={isProcessing}
         packageName={activePkg}
       />
+
+      {/* In-App Sudo Authentication Modal */}
+      {authRequest && (
+        <AuthModal
+          authRequest={authRequest}
+          onRespond={async (authId, password, cancelled) => {
+            await submitAuthResponse(authId, password, cancelled);
+            setAuthRequest(null);
+          }}
+        />
+      )}
 
       {/* Toast Notifications */}
       <ToastStack toasts={toasts} />

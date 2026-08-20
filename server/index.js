@@ -862,6 +862,67 @@ app.get('/api/icon', (req, res) => {
   fs.createReadStream(iconPath).pipe(res);
 });
 
+// --- In-App Sudo Askpass Bridge Endpoints ---
+const pendingAuthRequests = new Map();
+
+app.post('/api/auth/askpass', (req, res) => {
+  const { prompt } = req.body || {};
+  const authId = 'auth_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  const opId = engine.activeOperation?.id || null;
+
+  // 60-second timeout waiting for user response in frontend
+  const timer = setTimeout(() => {
+    if (pendingAuthRequests.has(authId)) {
+      pendingAuthRequests.delete(authId);
+      try {
+        res.status(408).json({ error: 'Authentication request timed out' });
+      } catch {}
+    }
+  }, 60000);
+
+  pendingAuthRequests.set(authId, { res, timer, opId, createdAt: Date.now() });
+
+  // Broadcast auth_required event to frontend via SSE
+  if (opId) {
+    engine.broadcast(opId, 'auth_required', {
+      authId,
+      prompt: prompt || 'Aura requires administrator privileges to proceed.',
+      pkg: engine.activeOperation?.pkg,
+    });
+  }
+});
+
+app.post('/api/auth/respond', (req, res) => {
+  const { authId, password, cancelled } = req.body || {};
+  if (!authId || !pendingAuthRequests.has(authId)) {
+    return res.status(404).json({ error: 'Authentication request expired or not found' });
+  }
+
+  const authReq = pendingAuthRequests.get(authId);
+  clearTimeout(authReq.timer);
+  pendingAuthRequests.delete(authId);
+
+  if (cancelled) {
+    try {
+      authReq.res.status(401).json({ error: 'User cancelled authentication' });
+    } catch {}
+    return res.json({ ok: true, cancelled: true });
+  }
+
+  if (password === undefined || password === null) {
+    try {
+      authReq.res.status(400).json({ error: 'Password required' });
+    } catch {}
+    return res.status(400).json({ error: 'Password required' });
+  }
+
+  try {
+    authReq.res.json({ password });
+  } catch {}
+
+  res.json({ ok: true });
+});
+
 app.listen(PORT, () => {
   console.log(`Aura Store backend running on http://localhost:${PORT}`);
 });
