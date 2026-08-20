@@ -139,7 +139,7 @@ Visit **[http://localhost:5173](http://localhost:5173)** to use Aura Store.
 * [x] **v3.3** — Intelligent Deterministic Search & Command Palette
 * [x] **v3.3.1** — Application Identity & Intent Resolution
 * [x] **v3.3.2** — Live Real-World Search Benchmark & Regression Corpus
-* [ ] **v3.4** — Package Detail UX & Inspection Overhaul
+* [x] **v3.4** — Package Detail UX & Inspection Overhaul
 * [ ] **v3.5** — Installation UX & Error Recovery Hardening
 * [ ] **v3.6** — Deep Native Desktop & Multi-Entry Integration
 * [ ] **v3.7** — Minimal Preferences & Settings
