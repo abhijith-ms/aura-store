@@ -136,12 +136,12 @@ export const getInstalled = async () => {
   return res.json();
 };
 
-export const launchApp = async (pkg, desktopFile = null) => {
+export const launchApp = async (pkg, desktopFile = null, actionId = null) => {
   try {
     const res = await fetch(`${API}/api/launch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pkg, desktopFile }),
+      body: JSON.stringify({ pkg, desktopFile, actionId }),
     });
     return res.json();
   } catch {

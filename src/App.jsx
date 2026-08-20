@@ -502,6 +502,10 @@ function MainApp() {
   const [pkgStack, setPkgStack] = useState([]);
   const [installed, setInstalled] = useState(new Set());
   const [aurInstalled, setAurInstalled] = useState([]);
+  const installedInfoMap = useMemo(
+    () => new Map(aurInstalled.map((p) => [p.name, p])),
+    [aurInstalled]
+  );
   const [updates, setUpdates] = useState([]);
   const [popularPkgs, setPopularPkgs] = useState([]);
   const [essentialPkgs, setEssentialPkgs] = useState([]);
@@ -840,9 +844,9 @@ function MainApp() {
     runPackageAction(pkg.Name, 'install');
   };
 
-  const handleLaunchApp = async (pkgName, displayName, desktopFile) => {
+  const handleLaunchApp = async (pkgName, displayName, desktopFile, actionId = null) => {
     addToast(`Launching ${displayName}…`, 'info');
-    await launchApp(pkgName, desktopFile);
+    await launchApp(pkgName, desktopFile, actionId);
   };
 
   const handleCancelInstall = async () => {
@@ -1098,12 +1102,14 @@ function MainApp() {
                           pkg={item.package}
                           index={i}
                           installed={installed}
+                          installedInfo={installedInfoMap}
                           isTopMatch={i === 0}
                           onSelect={(pkg) => {
                             addRecentSearch(query);
                             setSelectedPkg(pkg);
                           }}
                           onQuickInstall={handleQuickInstall}
+                          onLaunch={handleLaunchApp}
                         />
                       ))}
                     </div>
@@ -1123,11 +1129,13 @@ function MainApp() {
                             pkg={item.package}
                             index={i + 4}
                             installed={installed}
+                            installedInfo={installedInfoMap}
                             onSelect={(pkg) => {
                               addRecentSearch(query);
                               setSelectedPkg(pkg);
                             }}
                             onQuickInstall={handleQuickInstall}
+                            onLaunch={handleLaunchApp}
                           />
                         ))}
                       </div>
@@ -1163,8 +1171,10 @@ function MainApp() {
                         pkg={pkg}
                         index={i}
                         installed={installed}
+                        installedInfo={installedInfoMap}
                         onSelect={setSelectedPkg}
                         onQuickInstall={handleQuickInstall}
+                        onLaunch={handleLaunchApp}
                       />
                     ))}
                   </div>
@@ -1187,8 +1197,10 @@ function MainApp() {
                         pkg={pkg}
                         index={i}
                         installed={installed}
+                        installedInfo={installedInfoMap}
                         onSelect={setSelectedPkg}
                         onQuickInstall={handleQuickInstall}
+                        onLaunch={handleLaunchApp}
                       />
                     ))}
                   </div>
@@ -1226,8 +1238,10 @@ function MainApp() {
                       pkg={pkg}
                       index={i}
                       installed={installed}
+                      installedInfo={installedInfoMap}
                       onSelect={setSelectedPkg}
                       onQuickInstall={handleQuickInstall}
+                      onLaunch={handleLaunchApp}
                     />
                   ))}
                 </div>

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getPkgbuild, openDownloadsFolder, unlockPacman } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
 import { createPackageViewModel } from '../services/packageViewModel';
@@ -28,6 +29,29 @@ export default function PackageDetail({
   const [confirmingInstall, setConfirmingInstall] = useState(false);
   const [showReviewDetails, setShowReviewDetails] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState(null);
+  const openButtonRef = useRef(null);
+
+  const toggleDropdown = () => {
+    if (!openDropdown && openButtonRef.current) {
+      const rect = openButtonRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    }
+    setOpenDropdown(o => !o);
+  };
+
+  // Close the portal-rendered dropdown on outside click, since it no longer
+  // sits inside the button's own DOM subtree once escaped via createPortal.
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handleClickOutside = (e) => {
+      if (openButtonRef.current && !openButtonRef.current.contains(e.target) && !e.target.closest('.command-palette')) {
+        setOpenDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdown]);
 
   // Normalize raw package object into authoritative view model
   const vm = useMemo(() => {
@@ -197,29 +221,29 @@ export default function PackageDetail({
                   </button>
                 )}
                 {vm.state.launchable && (
-                  vm.launch.desktopEntries.length > 1 ? (
+                  vm.launch.desktopEntries.length > 1 || vm.launch.desktopEntries[0]?.actions?.length > 0 ? (
                     <div style={{ position: 'relative' }}>
                       <button
+                        ref={openButtonRef}
                         className="btn btn-primary btn-lg"
-                        onClick={() => setOpenDropdown(o => !o)}
+                        onClick={toggleDropdown}
                       >
                         Open ▾
                       </button>
-                      {openDropdown && (
+                      {openDropdown && dropdownPos && createPortal(
                         <div
                           className="command-palette"
                           style={{
-                            position: 'absolute',
-                            top: '100%',
-                            right: 0,
-                            marginTop: 6,
+                            position: 'fixed',
+                            top: dropdownPos.top,
+                            right: dropdownPos.right,
                             minWidth: 200,
-                            zIndex: 100,
+                            zIndex: 1000,
                           }}
                         >
-                          {vm.launch.desktopEntries.map((entry, idx) => (
+                          {vm.launch.desktopEntries.flatMap((entry, idx) => [
                             <div
-                              key={idx}
+                              key={`entry-${idx}`}
                               className="palette-result"
                               onClick={() => {
                                 setOpenDropdown(false);
@@ -227,9 +251,22 @@ export default function PackageDetail({
                               }}
                             >
                               <div className="palette-result-name">{entry.name}</div>
-                            </div>
-                          ))}
-                        </div>
+                            </div>,
+                            ...(entry.actions || []).map((action) => (
+                              <div
+                                key={`entry-${idx}-action-${action.id}`}
+                                className="palette-result"
+                                onClick={() => {
+                                  setOpenDropdown(false);
+                                  onLaunch(vm.name, action.name, entry.filename, action.id);
+                                }}
+                              >
+                                <div className="palette-result-name">{entry.name} — {action.name}</div>
+                              </div>
+                            )),
+                          ])}
+                        </div>,
+                        document.body
                       )}
                     </div>
                   ) : (

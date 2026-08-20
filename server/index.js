@@ -1,17 +1,19 @@
 import express from 'express';
 import cors from 'cors';
-import { exec, spawn } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { parseDesktopFile, stripFieldCodes } from './desktopEntries.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const askpassPath = path.join(__dirname, 'askpass.sh');
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const app = express();
 const PORT = 3001;
 
@@ -19,16 +21,15 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================================================
-// 1. System Desktop Entry Indexer (Multi-Entry Support)
+// 1. Flatpak Desktop Entry Indexer (fallback for packages pacman doesn't own)
 // ============================================================================
 function getSystemDesktopEntries() {
   const dirs = [
-    '/usr/share/applications',
-    path.join(os.homedir(), '.local/share/applications'),
     '/var/lib/flatpak/exports/share/applications',
+    path.join(os.homedir(), '.local/share/flatpak/exports/share/applications'),
   ];
 
-  const entriesMap = new Map(); // baseKey -> Array<{ filename, name, exec, isGui }>
+  const entriesMap = new Map(); // baseKey -> Array<{ filename, name, exec, isGui, actions, path }>
 
   for (const dir of dirs) {
     if (!fs.existsSync(dir)) continue;
@@ -39,20 +40,8 @@ function getSystemDesktopEntries() {
         const filePath = path.join(dir, f);
         try {
           const content = fs.readFileSync(filePath, 'utf8');
-          const isTerminal = /Terminal\s*=\s*true/i.test(content);
-          const isNoDisplay = /NoDisplay\s*=\s*true/i.test(content);
-          const isGui = !isTerminal && !isNoDisplay;
-
-          const nameMatch = content.match(/^Name\s*=\s*(.+)$/m);
-          const execMatch = content.match(/^Exec\s*=\s*(.+)$/m);
-
+          const item = { ...parseDesktopFile(content, f), path: filePath };
           const baseKey = f.replace(/\.desktop$/, '').toLowerCase();
-          const item = {
-            filename: f,
-            name: nameMatch ? nameMatch[1].trim() : baseKey,
-            exec: execMatch ? execMatch[1].trim().split(' ')[0] : baseKey,
-            isGui,
-          };
 
           if (!entriesMap.has(baseKey)) {
             entriesMap.set(baseKey, []);
@@ -64,6 +53,27 @@ function getSystemDesktopEntries() {
   }
 
   return entriesMap;
+}
+
+// ============================================================================
+// 1b. Authoritative pacman-owned Desktop Entry lookup (Multi-Entry Support)
+// ============================================================================
+async function getPacmanOwnedDesktopFiles(pkgName) {
+  const { stdout } = await execFileAsync('pacman', ['-Qlq', pkgName]).catch(() => ({ stdout: '' }));
+  const paths = stdout
+    .trim()
+    .split('\n')
+    .filter((p) => /\/applications\/[^/]+\.desktop$/.test(p));
+
+  const entries = [];
+  for (const filePath of paths) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const filename = path.basename(filePath);
+      entries.push({ ...parseDesktopFile(content, filename), path: filePath });
+    } catch {}
+  }
+  return entries;
 }
 
 // ============================================================================
@@ -510,27 +520,34 @@ app.get('/api/info', async (req, res) => {
 // --- Installed packages with real system Desktop Entry verification ---
 app.get('/api/installed', async (req, res) => {
   try {
-    const desktopEntriesMap = getSystemDesktopEntries();
+    const flatpakEntriesMap = getSystemDesktopEntries();
 
     const { stdout: aurPkgs } = await execAsync('pacman -Qm 2>/dev/null').catch(() => ({ stdout: '' }));
     const { stdout: allPkgs } = await execAsync('pacman -Q 2>/dev/null').catch(() => ({ stdout: '' }));
 
-    const aur = aurPkgs.trim().split('\n').filter(Boolean).map(l => {
+    const aur = [];
+    for (const l of aurPkgs.trim().split('\n').filter(Boolean)) {
       const [name, version] = l.split(' ');
-      const cleanKey = name.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
-      const entries = desktopEntriesMap.get(cleanKey) || desktopEntriesMap.get(name.toLowerCase()) || [];
+
+      let entries = await getPacmanOwnedDesktopFiles(name);
+      if (entries.length === 0) {
+        // Fallback for flatpak-installed apps, which pacman doesn't own files for.
+        const cleanKey = name.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
+        entries = flatpakEntriesMap.get(cleanKey) || flatpakEntriesMap.get(name.toLowerCase()) || [];
+      }
+
       const guiEntries = entries.filter(e => e.isGui);
       const isLaunchable = guiEntries.length > 0;
 
-      return {
+      aur.push({
         name,
         version,
         source: 'aur',
         isLaunchable,
         desktopFile: guiEntries[0]?.filename || null,
         desktopEntries: guiEntries,
-      };
-    });
+      });
+    }
 
     const allSet = new Set(allPkgs.trim().split('\n').filter(Boolean).map(l => l.split(' ')[0]));
     res.json({ aur, allInstalled: [...allSet] });
@@ -759,16 +776,44 @@ app.post('/api/open-downloads', (req, res) => {
   res.json({ ok: true });
 });
 
-// --- Launch installed app ---
-app.post('/api/launch', (req, res) => {
-  const { pkg, desktopFile } = req.body;
+// --- Launch installed app (optionally a specific Desktop Action) ---
+app.post('/api/launch', async (req, res) => {
+  const { pkg, desktopFile, actionId } = req.body;
   if (!pkg) return res.status(400).json({ error: 'pkg required' });
 
-  const desktopEntriesMap = getSystemDesktopEntries();
-  const cleanKey = pkg.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
-  const entries = desktopEntriesMap.get(cleanKey) || desktopEntriesMap.get(pkg.toLowerCase()) || [];
+  let entries = await getPacmanOwnedDesktopFiles(pkg);
+  if (entries.length === 0) {
+    const flatpakEntriesMap = getSystemDesktopEntries();
+    const cleanKey = pkg.toLowerCase().replace(/-(?:bin|git|desktop|electron|app)$/, '');
+    entries = flatpakEntriesMap.get(cleanKey) || flatpakEntriesMap.get(pkg.toLowerCase()) || [];
+  }
 
-  let target = desktopFile || entries[0]?.filename || pkg.replace(/-(?:bin|git)$/, '');
+  const entry = (desktopFile && entries.find(e => e.filename === desktopFile)) || entries[0];
+  const target = entry?.filename || desktopFile || pkg.replace(/-(?:bin|git)$/, '');
+
+  if (actionId) {
+    const action = entry?.actions?.find(a => a.id === actionId);
+    const absolutePath = entry?.path;
+
+    const runFallback = () => {
+      if (!action?.exec) return;
+      try {
+        const [cmd, ...args] = stripFieldCodes(action.exec).split(' ').filter(Boolean);
+        const fallback = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+        fallback.unref();
+      } catch {}
+    };
+
+    if (absolutePath) {
+      const child = spawn('gio', ['launch', absolutePath, actionId], { detached: true, stdio: 'ignore' });
+      child.unref();
+      child.on('error', runFallback);
+    } else {
+      runFallback();
+    }
+
+    return res.json({ ok: true, launched: target, action: actionId });
+  }
 
   const child = spawn('gtk-launch', [target], { detached: true, stdio: 'ignore' });
   child.unref();
