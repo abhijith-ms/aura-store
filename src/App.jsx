@@ -7,6 +7,7 @@ import TopProgressBar from './components/TopProgressBar';
 import AppIcon from './components/AppIcon';
 import CommandPalette from './components/search/CommandPalette';
 import AuthModal from './components/AuthModal';
+import SettingsTab from './components/SettingsTab';
 import { ThemeProvider } from './context/ThemeContext';
 import {
   searchPackages, getInstalled, getUpdates, getPackageInfo, getMultiplePackageInfo,
@@ -1280,6 +1281,9 @@ function MainApp() {
               onSelectPkg={setSelectedPkg}
               onClearHistory={handleClearHistory}
             />
+          ) : view === 'settings' ? (
+            /* Settings & Storage Maintenance Tab */
+            <SettingsTab addToast={addToast} />
           ) : null}
 
         </div>

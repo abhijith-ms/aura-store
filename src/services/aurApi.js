@@ -226,6 +226,80 @@ export const unlockPacman = async () => {
   }
 };
 
+// --- Storage & Maintenance API ---
+export const getStorageMetrics = async () => {
+  try {
+    const res = await fetch(`${API}/api/system/storage`);
+    return res.json();
+  } catch {
+    return {
+      aurCache: { bytes: 0, dirs: [] },
+      pacmanCache: { bytes: 0, path: '' },
+      diskSpace: { total: 0, used: 0, available: 0, percent: 0 },
+      helpers: { paru: false, yay: false },
+      orphans: [],
+    };
+  }
+};
+
+export const cleanCache = async (target = 'all', pkg = null) => {
+  try {
+    const res = await fetch(`${API}/api/system/clean-cache`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target, pkg }),
+    });
+    return res.json();
+  } catch {
+    return { ok: false, error: 'Failed to clean cache' };
+  }
+};
+
+export const cleanOrphans = async (pkgs = null) => {
+  try {
+    const res = await fetch(`${API}/api/system/clean-orphans`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pkgs }),
+    });
+    return res.json();
+  } catch {
+    return { ok: false, error: 'Failed to clean orphan packages' };
+  }
+};
+
+export const getAppSettings = async () => {
+  try {
+    const res = await fetch(`${API}/api/settings`);
+    const data = await res.json();
+    return data.settings || {};
+  } catch {
+    return {};
+  }
+};
+
+export const saveAppSettings = async (settings) => {
+  try {
+    const res = await fetch(`${API}/api/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    return res.json();
+  } catch {
+    return { ok: false };
+  }
+};
+
+export const formatBytes = (bytes, decimals = 1) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
 // --- Operation History Helper (Persistent Cache) ---
 const HISTORY_KEY = 'aura_operation_history_v1';
 

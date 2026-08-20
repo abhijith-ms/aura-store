@@ -7,6 +7,7 @@ const NAV = [
   { id: 'installed', icon: '✓', label: 'Installed' },
   { id: 'updates', icon: '↑', label: 'Updates' },
   { id: 'activity', icon: '📜', label: 'Activity' },
+  { id: 'settings', icon: '⚙️', label: 'Settings' },
 ];
 
 

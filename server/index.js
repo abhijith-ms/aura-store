@@ -8,6 +8,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { parseDesktopFile, stripFieldCodes } from './desktopEntries.js';
 import { findSystemIconPath, getIconMimeType } from './iconResolver.js';
+import {
+  getStorageMetrics,
+  cleanAurBuildCache,
+  getOrphanPackages,
+  getSettings,
+  saveSettings,
+} from './maintenance.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -378,6 +385,16 @@ class OperationEngine {
     });
     this.history = this.history.slice(0, LIMITS.MAX_HISTORY_ENTRIES);
     this.persistHistory();
+
+    // Auto-clean temporary AUR build tree if enabled in settings
+    if (finalStatus === 'completed' && op.pkg) {
+      try {
+        const settings = getSettings();
+        if (settings.autoCleanBuildCache) {
+          cleanAurBuildCache(op.pkg);
+        }
+      } catch {}
+    }
 
     this.activeOperation = null;
   }
@@ -921,6 +938,75 @@ app.post('/api/auth/respond', (req, res) => {
   } catch {}
 
   res.json({ ok: true });
+});
+
+// --- System Storage & Maintenance Endpoints ---
+app.get('/api/system/storage', async (req, res) => {
+  try {
+    const metrics = await getStorageMetrics();
+    res.json(metrics);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/system/clean-cache', async (req, res) => {
+  const { target, pkg } = req.body || {};
+  let aurResult = { freedBytes: 0, deletedCount: 0 };
+  let pacmanResult = { ok: true, message: '' };
+
+  if (!target || target === 'aur' || target === 'all') {
+    aurResult = cleanAurBuildCache(pkg || null);
+  }
+
+  if (target === 'pacman' || target === 'all') {
+    try {
+      await execAsync('paccache -rk1 2>/dev/null || pacman -Sc --noconfirm 2>/dev/null').catch(() => {});
+      pacmanResult = { ok: true, message: 'Pacman cache pruned' };
+    } catch (e) {
+      pacmanResult = { ok: false, error: e.message };
+    }
+  }
+
+  const updated = await getStorageMetrics();
+  res.json({
+    ok: true,
+    aur: aurResult,
+    pacman: pacmanResult,
+    storage: updated,
+  });
+});
+
+app.post('/api/system/clean-orphans', async (req, res) => {
+  const { pkgs } = req.body || {};
+  try {
+    let pkgList = pkgs;
+    if (!pkgList || pkgList.length === 0) {
+      const { stdout } = await execAsync('pacman -Qtdq 2>/dev/null').catch(() => ({ stdout: '' }));
+      pkgList = stdout.trim().split('\n').filter(Boolean);
+    }
+
+    if (pkgList.length === 0) {
+      return res.json({ ok: true, removed: [], message: 'No orphan packages to remove' });
+    }
+
+    const cmd = `pacman -Rns --noconfirm ${pkgList.join(' ')}`;
+    await execAsync(cmd);
+    const updatedOrphans = await getOrphanPackages();
+    res.json({ ok: true, removed: pkgList, remainingOrphans: updatedOrphans });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// --- Persistent User Settings Endpoints ---
+app.get('/api/settings', (req, res) => {
+  res.json({ settings: getSettings() });
+});
+
+app.post('/api/settings', (req, res) => {
+  const result = saveSettings(req.body || {});
+  res.json(result);
 });
 
 app.listen(PORT, () => {
