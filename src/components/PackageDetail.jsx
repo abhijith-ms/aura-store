@@ -155,7 +155,12 @@ export default function PackageDetail({
         <div className="detail-ambient-glow" />
 
         <div className="detail-hero-header">
-          <AppIcon pkgName={vm.name} size="hero" installed={vm.state.installed} />
+          <AppIcon
+            pkgName={vm.name}
+            iconName={vm.launch.desktopEntries[0]?.icon || null}
+            size="hero"
+            installed={vm.state.installed}
+          />
           <div className="detail-hero-meta">
             <div className="detail-name">{vm.displayName}</div>
             <div className="detail-pkgname">

@@ -131,6 +131,14 @@ export const getMultiplePackageInfo = async (pkgList) => {
   }
 };
 
+export const getSystemIconUrl = (iconName, pkgName) => {
+  if (!iconName && !pkgName) return null;
+  const params = new URLSearchParams();
+  if (iconName) params.append('name', iconName);
+  if (pkgName) params.append('pkg', pkgName);
+  return `${API}/api/icon?${params.toString()}`;
+};
+
 export const getInstalled = async () => {
   const res = await fetch(`${API}/api/installed`);
   return res.json();

@@ -42,7 +42,9 @@ v3.3.2 ── Real-World Search Benchmark (100% accuracy on live AUR regression 
   ↓
 v3.4  ── Package Experience & Repository Awareness (Pure view model, source badges, dependency stack)
   ↓
-v3.6  ── Deep Native Desktop & Multi-Entry Integration (Ownership-verified launch, Desktop Actions, grid Open button) [CURRENT]
+v3.6  ── Deep Native Desktop & Multi-Entry Integration (Ownership-verified launch, Desktop Actions, grid Open button)
+  ↓
+v3.6.1 ── Icon Theme Resolution (Icon= field extraction, XDG hicolor lookup & streaming icon API) [CURRENT]
 ```
 
 ---
@@ -158,25 +160,27 @@ Command Palette (Top 6)  /  Full Grid View (Best Matches + Other Results)
 
 ## 🧪 Automated Test & Verification Suite
 
-Aura maintains a comprehensive multi-tier test suite (**178 / 178 passing assertions**):
+Aura maintains a comprehensive multi-tier test suite (**197 / 197 passing assertions**):
 
 | Suite | File | Assertions | Purpose |
 |---|---|---|---|
+| **Icon Theme Resolution** | `tests/icon.test.js` | **14 / 14 PASS** | XDG icon hierarchy, size prioritization, raster/scalable precedence, and MIME types |
+| **Desktop Entry Parsing** | `tests/desktop.test.js` | **23 / 23 PASS** | `.desktop` Name/Exec/Icon extraction, GUI/Terminal/NoDisplay detection, Desktop Actions, field-code stripping |
 | **Package View Model & Experience** | `tests/package.test.js` | **28 / 28 PASS** | Source awareness, pure transformations, dependency parsing, and state resolution |
 | **Search Core Unit** | `tests/search.test.js` | **27 / 27 PASS** | Normalization, primary/secondary sorting, LRU cache eviction and TTL |
 | **Identity & Intent Unit** | `tests/search.identity.test.js` | **22 / 22 PASS** | Alias resolution, variant queries, extension demotion, and ambiguity protection |
 | **Live Search Benchmark** | `tests/search.benchmark.js` | **18 / 18 PASS (100%)** | Real queries against live AUR candidates (`chrome`, `vscode`, `firefox`, `discord`, `code`, `music player`) |
-| **Adversarial Runtime** | `tests/adversarial.test.js` | **63 / 63 PASS** | Concurrency conflict (HTTP 409), process cancellation, lock safety, memory bounds, verification invariants |
-| **Desktop Entry Parsing** | `tests/desktop.test.js` | **20 / 20 PASS** | `.desktop` Name/Exec extraction, GUI/Terminal/NoDisplay detection, Desktop Action section parsing, XDG field-code stripping |
+| **Adversarial Runtime** | `tests/adversarial.test.js` | **65 / 65 PASS** | Concurrency conflict (HTTP 409), process cancellation, lock safety, memory bounds, verification invariants |
 
 To run all validation suites:
 ```bash
+node tests/icon.test.js
+node tests/desktop.test.js
 node tests/package.test.js
 node tests/search.test.js
 node tests/search.identity.test.js
 node tests/search.benchmark.js
 node tests/adversarial.test.js
-node tests/desktop.test.js
 npm run build
 ```
 
@@ -213,8 +217,8 @@ Visit **[http://localhost:5173](http://localhost:5173)** to use Aura Store.
 * [x] **v3.3.2** — Live Real-World Search Benchmark & Regression Corpus
 * [x] **v3.4** — Package Detail UX & Inspection Overhaul
 * [x] **v3.6** — Deep Native Desktop & Multi-Entry Integration (ownership-verified via `pacman -Qlq`, Desktop Actions, grid Open button)
+* [x] **v3.6.1** — Icon Theme Resolution (`Icon=` field + XDG hicolor lookup & backend streaming API)
 * [ ] **v3.5** — Installation UX & Error Recovery Hardening *(deferred — GPG/disk-space/network error patterns still unhandled in `server/index.js`)*
-* [ ] **v3.6.1** — Icon Theme Resolution (`Icon=` field + XDG hicolor lookup, deferred out of v3.6)
 * [ ] **v3.7** — Minimal Preferences & Settings
 * [ ] **v4.0** — Native App Packaging (Standalone binary, `.desktop` entry, icon distribution)
 * [ ] **v4.1** — Real Arch User Testing & Feedback Loop

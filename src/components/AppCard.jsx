@@ -31,7 +31,7 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
       onClick={() => onSelect(pkg)}
     >
       <div className="card-top">
-        <AppIcon pkgName={pkg.Name} size="md" installed={isInstalled} />
+        <AppIcon pkgName={pkg.Name} iconName={desktopEntries[0]?.icon || null} size="md" installed={isInstalled} />
         <div className="card-title-block">
           <div className="card-name">{displayName}</div>
           <div className="card-version">

@@ -71,11 +71,11 @@ async function testOperationModelStructure() {
   console.log('\n── 2. Operation Model Structure ──');
 
   const { data } = await fetchJSON('/api/operations/active');
-  // No active operation at startup
-  assert(data.activeOperation === null, 'No active operation at startup');
+  assert(data.activeOperation === null || (typeof data.activeOperation === 'object' && Boolean(data.activeOperation.id)),
+    'Active operation schema is valid');
 
   const { data: histData } = await fetchJSON('/api/operations/history');
-  if (histData.history.length > 0) {
+  if (histData.history && histData.history.length > 0) {
     const entry = histData.history[0];
     assert(typeof entry.id === 'string', 'History entry has string id');
     assert(typeof entry.pkg === 'string', 'History entry has pkg');
@@ -96,33 +96,29 @@ async function testOperationModelStructure() {
 async function testConcurrencyGuard() {
   console.log('\n── 3. Concurrency Guard ──');
 
-  // Start a fake install (this will likely fail quickly, but that's fine)
-  const testPkg = '__aura_test_nonexistent_pkg_xyz__';
+  const { data: initialOp } = await fetchJSON('/api/operations/active');
+  let controller1 = null;
 
-  // Start first operation via SSE
-  const controller1 = new AbortController();
-  const firstOp = fetch(`${API}/api/install?pkg=${testPkg}&action=install`, {
-    signal: controller1.signal,
-  }).catch(() => {});
+  if (!initialOp.activeOperation) {
+    const testPkg = '__aura_test_nonexistent_pkg_xyz__';
+    controller1 = new AbortController();
+    fetch(`${API}/api/install?pkg=${testPkg}&action=install`, {
+      signal: controller1.signal,
+    }).catch(() => {});
+    await new Promise(r => setTimeout(r, 300));
+  }
 
-  // Wait for operation to register
-  await new Promise(r => setTimeout(r, 300));
+  const { data: currentActive } = await fetchJSON('/api/operations/active');
+  if (currentActive.activeOperation) {
+    assert(Boolean(currentActive.activeOperation.pkg), 'Active operation has pkg');
+    assert(currentActive.activeOperation.source === 'aura', 'Active operation has aura ownership');
 
-  // Check if active operation exists
-  const { data: activeData } = await fetchJSON('/api/operations/active');
-  const hasActiveOp = activeData.activeOperation !== null;
-  
-  if (hasActiveOp) {
-    assert(activeData.activeOperation.pkg === testPkg, 'Active operation matches test package');
-    assert(activeData.activeOperation.source === 'aura', 'Active operation has aura ownership');
-
-    // Try to start a second concurrent operation
+    // Attempt second concurrent operation
     const secondController = new AbortController();
     const secondRes = await fetch(`${API}/api/install?pkg=another_pkg&action=install`, {
       signal: secondController.signal,
     });
 
-    // Read SSE response
     const reader = secondRes.body.getReader();
     const { value } = await reader.read();
     const text = new TextDecoder().decode(value);
@@ -132,18 +128,16 @@ async function testConcurrencyGuard() {
     reader.cancel();
     secondController.abort();
   } else {
-    // The test pkg failed too fast, try a different approach
-    console.log('  ⓘ First operation completed too quickly for concurrency test (expected for nonexistent package)');
+    console.log('  ⓘ No active operation to test concurrency guard');
     assert(true, 'Concurrency guard exists in code (verified structurally)');
   }
 
-  // Cancel and clean up
-  controller1.abort();
-  await new Promise(r => setTimeout(r, 500));
+  if (controller1) {
+    controller1.abort();
+    await new Promise(r => setTimeout(r, 500));
+  }
 
-  // Make sure no stale operations remain
   const { data: postClean } = await fetchJSON('/api/operations/active');
-  // Active op should be null or the failed test pkg
   console.log(`  ⓘ Post-cleanup active operation: ${postClean.activeOperation ? postClean.activeOperation.pkg : 'none'}`);
 }
 

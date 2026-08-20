@@ -37,12 +37,14 @@ console.log('── 1. Basic Name/Exec Extraction ──');
     'Type=Application',
     'Name=Firefox',
     'Exec=firefox %u',
+    'Icon=firefox',
     'Terminal=false',
   ].join('\n');
 
   const entry = parseDesktopFile(content, 'firefox.desktop');
   assert(entry.name === 'Firefox', 'Extracts Name');
   assert(entry.exec === 'firefox', 'Extracts Exec (first word only)');
+  assert(entry.icon === 'firefox', 'Extracts Icon');
   assert(entry.isGui === true, 'Terminal=false yields isGui true');
   assert(entry.actions.length === 0, 'No Actions= yields empty actions array');
 }
@@ -80,6 +82,7 @@ console.log('\n── 2. Desktop Action Parsing ──');
     '[Desktop Action new-window]',
     'Name=Open a New Window',
     'Exec=firefox --new-window',
+    'Icon=window-new',
     '',
     '[Desktop Action new-private-window]',
     'Name=Open a New Private Window',
@@ -91,8 +94,10 @@ console.log('\n── 2. Desktop Action Parsing ──');
   assert(entry.actions[0].id === 'new-window', 'First action id correct');
   assert(entry.actions[0].name === 'Open a New Window', 'First action Name= extracted from its own section');
   assert(entry.actions[0].exec === 'firefox --new-window', 'First action Exec= extracted from its own section');
+  assert(entry.actions[0].icon === 'window-new', 'First action Icon= extracted from its own section');
   assert(entry.actions[1].id === 'new-private-window', 'Second action id correct');
   assert(entry.actions[1].name === 'Open a New Private Window', 'Second action Name= not bled from first section');
+  assert(entry.actions[1].icon === null, 'Second action Icon= is null when omitted');
 }
 
 {

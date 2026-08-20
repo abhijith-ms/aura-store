@@ -12,6 +12,7 @@ export function parseDesktopFile(content, filename) {
 
   const nameMatch = content.match(/^Name\s*=\s*(.+)$/m);
   const execMatch = content.match(/^Exec\s*=\s*(.+)$/m);
+  const iconMatch = content.match(/^Icon\s*=\s*(.+)$/m);
   const baseKey = filename.replace(/\.desktop$/, '').toLowerCase();
 
   const actionsMatch = content.match(/^Actions\s*=\s*(.+)$/m);
@@ -25,10 +26,12 @@ export function parseDesktopFile(content, filename) {
     const section = sectionMatch ? sectionMatch[1] : '';
     const actionNameMatch = section.match(/^Name\s*=\s*(.+)$/m);
     const actionExecMatch = section.match(/^Exec\s*=\s*(.+)$/m);
+    const actionIconMatch = section.match(/^Icon\s*=\s*(.+)$/m);
     return {
       id,
       name: actionNameMatch ? actionNameMatch[1].trim() : id,
       exec: actionExecMatch ? actionExecMatch[1].trim() : '',
+      icon: actionIconMatch ? actionIconMatch[1].trim() : null,
     };
   });
 
@@ -36,6 +39,7 @@ export function parseDesktopFile(content, filename) {
     filename,
     name: nameMatch ? nameMatch[1].trim() : baseKey,
     exec: execMatch ? execMatch[1].trim().split(' ')[0] : baseKey,
+    icon: iconMatch ? iconMatch[1].trim() : null,
     isGui,
     actions,
   };

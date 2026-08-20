@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { parseDesktopFile, stripFieldCodes } from './desktopEntries.js';
+import { findSystemIconPath, getIconMimeType } from './iconResolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -545,6 +546,7 @@ app.get('/api/installed', async (req, res) => {
         source: 'aur',
         isLaunchable,
         desktopFile: guiEntries[0]?.filename || null,
+        icon: guiEntries[0]?.icon || null,
         desktopEntries: guiEntries,
       });
     }
@@ -840,6 +842,24 @@ app.get('/api/pkgbuild', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// --- System Icon Streaming from XDG Theme ---
+app.get('/api/icon', (req, res) => {
+  const { name, pkg } = req.query;
+  if (!name && !pkg) {
+    return res.status(400).json({ error: 'name or pkg parameter required' });
+  }
+
+  const iconPath = findSystemIconPath(name, pkg);
+  if (!iconPath) {
+    return res.status(404).json({ error: 'Icon not found on system' });
+  }
+
+  const mimeType = getIconMimeType(iconPath);
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  fs.createReadStream(iconPath).pipe(res);
 });
 
 app.listen(PORT, () => {
