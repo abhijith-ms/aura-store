@@ -48,7 +48,9 @@ v3.6  ── Deep Native Desktop & Multi-Entry Integration (Ownership-verified l
   ↓
 v3.6.1 ── Icon Theme Resolution (Icon= field extraction, XDG hicolor lookup & streaming icon API)
   ↓
-v3.7  ── Settings & Storage Maintenance (Cache cleaner, orphan packages, user preferences & auto-cleanup) [CURRENT]
+v3.7  ── Settings & Storage Maintenance (Cache cleaner, orphan packages, user preferences & auto-cleanup)
+  ↓
+v4.0  ── Native App Packaging & Arch PKGBUILD (Single-process runtime, XDG .desktop, launcher & PKGBUILD) [CURRENT]
 ```
 
 ---
@@ -164,10 +166,11 @@ Command Palette (Top 6)  /  Full Grid View (Best Matches + Other Results)
 
 ## 🧪 Automated Test & Verification Suite
 
-Aura maintains a comprehensive multi-tier test suite (**223 / 223 passing assertions**):
+Aura maintains a comprehensive multi-tier test suite (**234 / 234 passing assertions**):
 
 | Suite | File | Assertions | Purpose |
 |---|---|---|---|
+| **Packaging & Desktop Integration** | `tests/packaging.test.js` | **11 / 11 PASS** | `.desktop` parsing, SVG vector validity, launcher permissions, and PKGBUILD correctness |
 | **Storage & Maintenance** | `tests/maintenance.test.js` | **17 / 17 PASS** | Cache size calculations, settings persistence, storage API schema, and orphan parsing |
 | **In-App Sudo Auth Bridge** | `tests/auth.test.js` | **5 / 5 PASS** | Askpass script integrity, backend response queuing, user cancellation & validation |
 | **Icon Theme Resolution** | `tests/icon.test.js` | **14 / 14 PASS** | XDG icon hierarchy, size prioritization, raster/scalable precedence, and MIME types |
@@ -180,6 +183,7 @@ Aura maintains a comprehensive multi-tier test suite (**223 / 223 passing assert
 
 To run all validation suites:
 ```bash
+node tests/packaging.test.js
 node tests/maintenance.test.js
 node tests/auth.test.js
 node tests/icon.test.js
@@ -194,26 +198,32 @@ npm run build
 
 ---
 
-## 🚀 Running Locally
+## 🚀 Running Locally & Desktop Launch
 
 ### Prerequisites
 * Arch Linux / Arch-based distribution
 * Node.js (v18+) & `npm`
 * `pacman` and an AUR helper (`paru` or `yay`)
 
-### Start Aura Store
+### 1. One-Click Desktop Application Mode
 ```bash
-# 1. Install dependencies
-npm install
+./bin/aura-store
+```
+*Automatically builds production bundle, starts unified backend on port 3001, and launches dedicated isolated frameless app window.*
 
-# 2. Start the backend Operation Engine (Port 3001)
+### 2. Development Mode
+```bash
+# Start backend (Port 3001)
 node server/index.js &
 
-# 3. Start the frontend interface (Port 5173)
+# Start Vite dev server (Port 5173)
 npm run dev
 ```
 
-Visit **[http://localhost:5173](http://localhost:5173)** to use Aura Store.
+### 3. Arch Linux System Installation via PKGBUILD
+```bash
+makepkg -si
+```
 
 ---
 
@@ -228,7 +238,7 @@ Visit **[http://localhost:5173](http://localhost:5173)** to use Aura Store.
 * [x] **v3.6** — Deep Native Desktop & Multi-Entry Integration (ownership-verified via `pacman -Qlq`, Desktop Actions, grid Open button)
 * [x] **v3.6.1** — Icon Theme Resolution (`Icon=` field + XDG hicolor lookup & backend streaming API)
 * [x] **v3.7** — Settings & Storage Maintenance (Cache cleaner, orphan packages, user preferences & auto-cleanup)
-* [ ] **v4.0** — Native App Packaging (Standalone binary, `.desktop` entry, icon distribution)
+* [x] **v4.0** — Native App Packaging (Standalone binary, `.desktop` entry, icon distribution, PKGBUILD)
 * [ ] **v4.1** — Real Arch User Testing & Feedback Loop
 * [ ] **v4.2** — Public Release
 * [ ] **v5.0** — Universal Multi-Source Ecosystem (Official Arch Repositories, Flathub/Flatpak, AppImageHub, Chaotic-AUR & GitHub Releases)

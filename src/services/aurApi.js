@@ -1,4 +1,13 @@
-const API = 'http://localhost:3001';
+const getApiBase = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    if (window.location.port === '3001' || !window.location.port) {
+      return window.location.origin;
+    }
+  }
+  return 'http://localhost:3001';
+};
+
+const API = getApiBase();
 
 export const searchPackages = async (q, by = 'name-desc') => {
   if (!q?.trim()) return [];

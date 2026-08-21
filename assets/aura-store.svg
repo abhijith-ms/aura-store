@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f0c1b"/>
+      <stop offset="50%" stop-color="#18132b"/>
+      <stop offset="100%" stop-color="#0b0814"/>
+    </linearGradient>
+    <linearGradient id="diamond-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-grad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="2"/>
+
+  <!-- Ambient Glow -->
+  <circle cx="256" cy="256" r="140" fill="#8b5cf6" opacity="0.25" filter="url(#glow)"/>
+
+  <!-- Central Diamond Glyph -->
+  <g transform="translate(256, 256)">
+    <!-- Outer Rotated Diamond -->
+    <path d="M 0 -130 L 130 0 L 0 130 L -130 0 Z" fill="url(#diamond-grad)" filter="url(#glow)"/>
+
+    <!-- Inner Core Cutout -->
+    <path d="M 0 -75 L 75 0 L 0 75 L -75 0 Z" fill="#0f0c1b"/>
+
+    <!-- Central Sparkle Diamond -->
+    <path d="M 0 -35 L 35 0 L 0 35 L -35 0 Z" fill="url(#accent-grad)"/>
+  </g>
+
+  <!-- Sparkle Accent Stars -->
+  <circle cx="140" cy="140" r="8" fill="#38bdf8" opacity="0.8" filter="url(#glow)"/>
+  <circle cx="380" cy="160" r="12" fill="#c084fc" opacity="0.9" filter="url(#glow)"/>
+  <circle cx="370" cy="370" r="6" fill="#38bdf8" opacity="0.7"/>
+</svg>

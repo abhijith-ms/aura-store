@@ -1009,6 +1009,20 @@ app.post('/api/settings', (req, res) => {
   res.json(result);
 });
 
+// --- Production Frontend Static Serving (Unified Runtime) ---
+const distPath = path.join(__dirname, '../dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    next();
+  });
+}
+
 app.listen(PORT, () => {
   console.log(`Aura Store backend running on http://localhost:${PORT}`);
 });

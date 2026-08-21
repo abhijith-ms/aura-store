@@ -1,0 +1,54 @@
+# Maintainer: Aura Store Contributors <https://github.com/aura-store/aura-store>
+pkgname=aura-store-git
+_pkgname=aura-store
+pkgver=4.0.0
+pkgrel=1
+pkgdesc="Modern, intelligent Linux software center for Arch Linux and the AUR"
+arch=('x86_64' 'aarch64')
+url="https://github.com/aura-store/aura-store"
+license=('MIT')
+depends=('nodejs>=18' 'pacman')
+optdepends=(
+  'paru: feature-rich AUR helper with PKGBUILD review (recommended)'
+  'yay: fast Golang AUR helper'
+  'chromium: standalone frameless desktop window'
+  'brave-bin: standalone frameless desktop window'
+  'google-chrome: standalone frameless desktop window'
+)
+provides=('aura-store')
+conflicts=('aura-store')
+source=()
+md5sums=()
+
+build() {
+  cd "${srcdir}/.." 2>/dev/null || true
+  if [ -f "package.json" ]; then
+    npm run build
+  fi
+}
+
+package() {
+  local root_dir="${srcdir}/.."
+  [ -f "${root_dir}/package.json" ] || root_dir="${pkgdir}"
+
+  # 1. Install app assets to /usr/lib/aura-store
+  install -d "${pkgdir}/usr/lib/aura-store"
+  install -d "${pkgdir}/usr/lib/aura-store/server"
+  install -d "${pkgdir}/usr/lib/aura-store/dist"
+  install -d "${pkgdir}/usr/bin"
+  install -d "${pkgdir}/usr/share/applications"
+  install -d "${pkgdir}/usr/share/icons/hicolor/scalable/apps"
+
+  # Copy server and dist bundle
+  cp -r server/* "${pkgdir}/usr/lib/aura-store/server/" 2>/dev/null || true
+  cp -r dist/* "${pkgdir}/usr/lib/aura-store/dist/" 2>/dev/null || true
+  cp package.json "${pkgdir}/usr/lib/aura-store/" 2>/dev/null || true
+  chmod +x "${pkgdir}/usr/lib/aura-store/server/askpass.sh" 2>/dev/null || true
+
+  # 2. Binary symlink in /usr/bin
+  install -m755 bin/aura-store "${pkgdir}/usr/bin/aura-store"
+
+  # 3. Desktop Entry and Icon
+  install -m644 aura-store.desktop "${pkgdir}/usr/share/applications/aura-store.desktop"
+  install -m644 assets/aura-store.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/aura-store.svg"
+}

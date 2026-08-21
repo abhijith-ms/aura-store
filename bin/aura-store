@@ -1,0 +1,47 @@
+#!/bin/bash
+# Standalone Desktop Launcher for Aura Store
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PORT=3001
+HOST="http://localhost:${PORT}"
+USER_DATA_DIR="${HOME}/.config/aura/app-profile"
+
+# 1. Build dist bundle if not already present
+if [ ! -d "${DIR}/dist" ]; then
+  echo "Building Aura Store frontend..."
+  (cd "${DIR}" && npm run build >/dev/null 2>&1)
+fi
+
+# 2. Start unified server in background if not already listening
+if ! ss -tulpn 2>/dev/null | grep -q ":${PORT}"; then
+  (cd "${DIR}" && node server/index.js >/dev/null 2>&1) &
+  sleep 0.8
+fi
+
+# 3. Handle optional action view flags
+VIEW_PARAM=""
+if [[ "$*" == *"--view=updates"* ]]; then
+  VIEW_PARAM="?view=updates"
+elif [[ "$*" == *"--view=explore"* ]]; then
+  VIEW_PARAM="?view=explore"
+fi
+
+TARGET_URL="${HOST}${VIEW_PARAM}"
+
+# 4. Launch dedicated isolated frameless desktop window
+if command -v brave >/dev/null 2>&1; then
+  exec brave --app="${TARGET_URL}" --user-data-dir="${USER_DATA_DIR}" --class="aura-store" --name="Aura Store" "$@"
+elif command -v google-chrome-stable >/dev/null 2>&1; then
+  exec google-chrome-stable --app="${TARGET_URL}" --user-data-dir="${USER_DATA_DIR}" --class="aura-store" --name="Aura Store" "$@"
+elif command -v chromium >/dev/null 2>&1; then
+  exec chromium --app="${TARGET_URL}" --user-data-dir="${USER_DATA_DIR}" --class="aura-store" --name="Aura Store" "$@"
+elif command -v vivaldi >/dev/null 2>&1; then
+  exec vivaldi --app="${TARGET_URL}" --user-data-dir="${USER_DATA_DIR}" --class="aura-store" --name="Aura Store" "$@"
+elif command -v zen-browser >/dev/null 2>&1; then
+  exec zen-browser --new-window "${TARGET_URL}"
+elif command -v firefox >/dev/null 2>&1; then
+  exec firefox --new-window "${TARGET_URL}"
+else
+  exec xdg-open "${TARGET_URL}"
+fi
