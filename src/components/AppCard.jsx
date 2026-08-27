@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { AlertTriangle, Check, Package, Star, TrendingUp, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Check, Package, Star, TrendingUp, ChevronDown, Box } from 'lucide-react';
 import { formatNumber, getAppDisplayName } from '../services/aurApi';
 import AppIcon from './AppIcon';
 
 export default function AppCard({ pkg, installed, installedInfo, onSelect, onQuickInstall, onLaunch, index = 0, isTopMatch = false }) {
   const isOfficial = pkg.Source === 'official';
+  // Chaotic-AUR is just another synced repo (Source: 'official'), but it's
+  // community-built pre-compiled AUR packages, not Arch's own maintainers —
+  // distinct trust model, so it gets its own badge instead of blending into
+  // the generic "Official" one.
+  const isChaoticAur = isOfficial && (pkg.Repository || '').toLowerCase() === 'chaotic-aur';
   const isFlathub = pkg.Source === 'flathub';
   // Flathub identifies apps by AppId (org.mozilla.firefox), not the display name.
   const isInstalled = installed.has(isFlathub ? (pkg.AppId || pkg.Name) : pkg.Name);
@@ -42,7 +47,9 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
             {isFlathub ? pkg.AppId : isCustomName ? pkg.Name : `v${pkg.Version}`}
           </div>
         </div>
-        {isOfficial ? (
+        {isChaoticAur ? (
+          <span className="chip chip-orange" style={{ fontSize: 10 }} title="Chaotic-AUR: community-built AUR binary, not reviewed by Arch's own maintainers">Chaotic-AUR</span>
+        ) : isOfficial ? (
           <span className="chip chip-green" style={{ fontSize: 10 }} title={`Official Arch repository: ${pkg.Repository}`}>{pkg.Repository}</span>
         ) : isFlathub ? (
           <span className="chip chip-indigo" style={{ fontSize: 10 }} title="Sandboxed app via Flathub">Flathub</span>
@@ -55,7 +62,12 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
 
       <div className="card-footer">
         <div className="card-stats">
-          {isOfficial ? (
+          {isChaoticAur ? (
+            <div className="stat" title="Community-built binary from the Chaotic-AUR CI">
+              <Box size={12} strokeWidth={2} />
+              <span>Community Build</span>
+            </div>
+          ) : isOfficial ? (
             <div className="stat" title="Official Arch repository">
               <Check size={12} strokeWidth={2} />
               <span>Official</span>

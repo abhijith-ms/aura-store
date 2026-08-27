@@ -52,8 +52,20 @@ export function createPackageViewModel(pkg, context = {}) {
 
   // 2. Source / Repository Concept
   const isOfficial = pkg.Source === 'official';
+  // Chaotic-AUR is just another synced repo (Source: 'official' from pacman's
+  // point of view), but it's community-built pre-compiled AUR packages, not
+  // Arch's own maintainers — a distinct trust model that deserves its own
+  // label instead of blending into "Official Arch Repository".
+  const isChaoticAur = isOfficial && (pkg.Repository || '').toLowerCase() === 'chaotic-aur';
   const isFlathub = pkg.Source === 'flathub';
-  const source = isOfficial
+  const source = isChaoticAur
+    ? {
+        type: 'chaotic-aur',
+        label: 'Chaotic-AUR',
+        fullName: 'Chaotic-AUR',
+        description: 'Community-built binary package from the Chaotic-AUR CI — a pre-compiled AUR package, not reviewed or signed by Arch\'s own maintainers',
+      }
+    : isOfficial
     ? {
         type: 'official',
         label: pkg.Repository || 'Official',

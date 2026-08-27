@@ -74,6 +74,48 @@ console.log('── 1. Basic Normalization & Source Awareness ──');
 }
 
 // ─────────────────────────────────────────────────────────────
+// 1b. Chaotic-AUR Source Detection (v5.0)
+// ─────────────────────────────────────────────────────────────
+console.log('\n── 1b. Chaotic-AUR Source Detection ──');
+
+{
+  // A chaotic-aur result arrives shaped exactly like any other official/synced
+  // repo result (Source: 'official') — only Repository distinguishes it.
+  const chaoticPkg = {
+    Name: 'spotify',
+    Version: '1:1.2.63.394.gdbcaa940-1',
+    Description: 'A proprietary music streaming service',
+    Source: 'official',
+    Repository: 'chaotic-aur',
+    Maintainer: 'chaotic-aur-ci',
+    URL: 'https://www.spotify.com/',
+    License: ['LicenseRef-Spotify-EULA'],
+  };
+
+  const vm = createPackageViewModel(chaoticPkg, {
+    installedPackages: new Set(['spotify']),
+  });
+
+  assert(vm.source.type === 'chaotic-aur', 'Chaotic-AUR repo produces source.type "chaotic-aur", not "official"');
+  assert(vm.source.label === 'Chaotic-AUR', 'Source label is "Chaotic-AUR"');
+  assert(vm.source.description.includes('not reviewed or signed by Arch'), 'Description accurately disclaims Arch-maintainer review/signing');
+  assert(!vm.source.description.startsWith('Maintained and signed by Arch'), 'Description does not reuse the official-repo copy verbatim');
+  assert(vm.upstream.aur === null, 'No AUR page link (not an AUR RPC result)');
+  assert(vm.metadata.maintainer === 'chaotic-aur-ci', 'Maintainer field still passes through from pacman Packager');
+  assert(vm.state.installed === true, 'Installed-state check still works (keys off pkgName like official)');
+
+  // Case-insensitivity: pacman/PKGBUILD repo names are conventionally
+  // lowercase, but don't silently misclassify if that ever varies.
+  const vmCaseVariant = createPackageViewModel({ ...chaoticPkg, Repository: 'Chaotic-AUR' });
+  assert(vmCaseVariant.source.type === 'chaotic-aur', 'Chaotic-AUR detection is case-insensitive');
+
+  // A same-shaped result from a real official repo must NOT be misclassified.
+  const officialPkg = createPackageViewModel({ ...chaoticPkg, Repository: 'extra' });
+  assert(officialPkg.source.type === 'official', 'A genuine official repo (extra) is not misclassified as Chaotic-AUR');
+  assert(officialPkg.source.label === 'extra', 'Official repo label still shows the real repo name');
+}
+
+// ─────────────────────────────────────────────────────────────
 // 2. Classification Agreement with Search Engine
 // ─────────────────────────────────────────────────────────────
 console.log('\n── 2. Classification Consistency ──');

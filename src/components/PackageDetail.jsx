@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft, Package, Check, AlertTriangle, TrendingUp, Star, X,
   ChevronDown, ChevronUp, Trash2, Circle, CircleDot, Download, Lock,
-  ExternalLink, Copy,
+  ExternalLink, Copy, Box,
 } from 'lucide-react';
 import { getPkgbuild, openDownloadsFolder, unlockPacman, formatNumber } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
@@ -69,6 +69,7 @@ export default function PackageDetail({
   }, [pkg, installed, updates, aurInstalledList, isInstalling, opState]);
 
   const isOfficial = vm?.source?.type === 'official';
+  const isChaoticAur = vm?.source?.type === 'chaotic-aur';
   const isFlathub = vm?.source?.type === 'flathub';
   // Flathub install/uninstall needs the reverse-DNS AppId, not the display name.
   const installTarget = vm ? { Name: vm.name, Source: vm.raw?.Source, AppId: vm.raw?.AppId } : null;
@@ -181,7 +182,7 @@ export default function PackageDetail({
 
             {/* Source & Classification Badges */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
-              <span className={`chip ${isOfficial ? 'chip-green' : isFlathub ? 'chip-indigo' : 'chip-purple'}`} title={vm.source.fullName}>
+              <span className={`chip ${isChaoticAur ? 'chip-orange' : isOfficial ? 'chip-green' : isFlathub ? 'chip-indigo' : 'chip-purple'}`} title={vm.source.fullName}>
                 {vm.source.label}
               </span>
               {isFlathub && vm.metadata.verified && (
@@ -202,7 +203,12 @@ export default function PackageDetail({
         {/* Hero Actions & Community Stats */}
         <div className="detail-hero-actions">
           <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-            {isOfficial ? (
+            {isChaoticAur ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
+                <Box size={14} strokeWidth={2} style={{ color: 'var(--warning)' }} />
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Community Build</span>
+              </div>
+            ) : isOfficial ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
                 <Check size={14} strokeWidth={2.5} style={{ color: 'var(--success)' }} />
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Signed by {vm.source.label}</span>
@@ -604,7 +610,7 @@ export default function PackageDetail({
 
       {/* Build Transparency & PKGBUILD Recipe (AUR-only — official repo packages
           are pre-built signed binaries, not built locally from a fetchable recipe) */}
-      {!isOfficial && !isFlathub && (
+      {!isOfficial && !isChaoticAur && !isFlathub && (
       <div className="detail-section">
         <div className="detail-section-title" style={{ cursor: 'pointer' }} onClick={togglePkgbuild}>
           <span>Build Transparency & PKGBUILD</span>
