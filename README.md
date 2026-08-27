@@ -151,7 +151,7 @@ User Query
    ↓
 Query Normalization & Term Separation (identityTerms, contextTerms, variantTerms)
    ↓
-Smart Candidate Retrieval (fetchSearchCandidates.js — merges AUR + Official Arch Repos)
+Smart Candidate Retrieval (fetchSearchCandidates.js — merges AUR + Official Arch Repos + Flathub)
    ↓
 LRU Candidate Cache (3-minute TTL, 100 entries max)
    ↓
@@ -166,12 +166,13 @@ Command Palette (Top 6)  /  Full Grid View (Best Matches + Other Results)
 
 ## 🧪 Automated Test & Verification Suite
 
-Aura maintains a comprehensive multi-tier test suite (**~292 passing assertions** — the adversarial and maintenance suites query live system/package state, so their exact counts can shift slightly run to run):
+Aura maintains a comprehensive multi-tier test suite (**~314 passing assertions** — the adversarial and maintenance suites query live system/package state, so their exact counts can shift slightly run to run):
 
 | Suite | File | Assertions | Purpose |
 |---|---|---|---|
 | **Packaging & Desktop Integration** | `tests/packaging.test.js` | **30 / 30 PASS** | `.desktop` parsing, SVG vector validity, launcher permissions, PKGBUILD correctness, and the Electron native shell (main process, window icon, IPC wiring) |
 | **Official Arch Repo Search** | `tests/official-repo.test.js` | **34 / 34 PASS** | `pacman -Ss`/`-Si` output parsing (fixtures) and live `/api/search/official`, `/api/info/official` endpoint checks |
+| **Flathub Search & Install** | `tests/flathub.test.js` | **22 / 22 PASS** | Install command-builder (pure, no flatpak/pkexec invoked), live install-scope detection, and live `/api/search/flathub`, `/api/info/flathub` endpoint checks |
 | **Storage & Maintenance** | `tests/maintenance.test.js` | **~22 / 22 PASS** | Cache size calculations, settings persistence, storage API schema, and orphan parsing |
 | **In-App Sudo Auth Bridge** | `tests/auth.test.js` | **7 / 7 PASS** | Askpass script integrity, backend response queuing, user cancellation & validation |
 | **Icon Theme Resolution** | `tests/icon.test.js` | **14 / 14 PASS** | XDG icon hierarchy, size prioritization, raster/scalable precedence, and MIME types |
@@ -186,6 +187,7 @@ To run all validation suites:
 ```bash
 node tests/packaging.test.js
 node tests/official-repo.test.js
+node tests/flathub.test.js
 node tests/maintenance.test.js
 node tests/auth.test.js
 node tests/icon.test.js
@@ -245,7 +247,7 @@ makepkg -si
 * [ ] **v4.2** — Public Release
 * [~] **v5.0** — Universal Multi-Source Ecosystem
   * [x] Official Arch Repositories (core/extra/multilib & distro-added repos via `pacman -Ss`/`-Si`, merged into search ranking, source badges in UI)
-  * [ ] Flathub/Flatpak
+  * [x] Flathub (search/browse/install/uninstall via Flathub's v2 API + `flatpak`, scope-aware install, verified badges, sandboxed apps distinct from AUR/official)
   * [ ] AppImageHub
   * [ ] Chaotic-AUR (as a distinct labeled source — already searchable today as just another synced repo)
   * [ ] GitHub Releases
