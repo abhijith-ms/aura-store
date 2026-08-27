@@ -495,7 +495,11 @@ function UpdatesTab({
 
 // ---------- Main App Content ----------
 function MainApp() {
-  const [view, setView] = useState('explore');
+  const [view, setView] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('view');
+    const validViews = ['explore', 'installed', 'updates', 'activity', 'settings'];
+    return validViews.includes(requested) ? requested : 'explore';
+  });
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('name-desc');
   const [results, setResults] = useState([]);
