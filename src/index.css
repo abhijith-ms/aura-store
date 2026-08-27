@@ -225,8 +225,8 @@ html, body, #root {
 }
 
 .sidebar-logo-icon {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   flex-shrink: 0;
 }
