@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { History, ArrowRight } from 'lucide-react';
 import AppIcon from '../AppIcon';
 import { getAppDisplayName } from '../../services/aurApi';
 
@@ -109,7 +110,7 @@ export default function CommandPalette({
                 className="palette-recent-item"
                 onClick={() => onRecentClick(rq)}
               >
-                <span className="palette-recent-icon">↻</span>
+                <span className="palette-recent-icon" style={{ display: 'inline-flex' }}><History size={13} strokeWidth={2} /></span>
                 <span>{rq}</span>
               </div>
             ))}
@@ -160,8 +161,9 @@ export default function CommandPalette({
               <div
                 className="palette-view-all"
                 onClick={onViewAll}
+                style={{ display: 'flex', alignItems: 'center', gap: 4 }}
               >
-                View all {results.length} results →
+                View all {results.length} results <ArrowRight size={12} strokeWidth={2} />
               </div>
             )}
           </div>

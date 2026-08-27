@@ -17,7 +17,8 @@ export default function AppIcon({
 
   const systemIconUrl = !systemIconError ? getSystemIconUrl(iconName, pkgName) : null;
   const logoInfo = !cdnIconError ? resolvePackageLogo(pkgName) : null;
-  const fallbackIcon = getPackageIcon(pkgName || '');
+  const FallbackIcon = getPackageIcon(pkgName || '');
+  const fallbackIconSize = { sm: 14, md: 18, lg: 24, hero: 30 }[size] || 18;
 
   useEffect(() => {
     setDirectIconError(false);
@@ -54,7 +55,7 @@ export default function AppIcon({
         />
         {!loaded && (
           <span className="app-icon-fallback-emoji" style={{ opacity: 0.6 }}>
-            {fallbackIcon}
+            <FallbackIcon size={fallbackIconSize} strokeWidth={1.75} />
           </span>
         )}
       </div>
@@ -83,7 +84,7 @@ export default function AppIcon({
         />
         {!loaded && (
           <span className="app-icon-fallback-emoji" style={{ opacity: 0.6 }}>
-            {fallbackIcon}
+            <FallbackIcon size={fallbackIconSize} strokeWidth={1.75} />
           </span>
         )}
       </div>
@@ -109,7 +110,7 @@ export default function AppIcon({
         />
         {!loaded && !cdnIconError && (
           <span className="app-icon-fallback-emoji" style={{ opacity: 0.6 }}>
-            {fallbackIcon}
+            <FallbackIcon size={fallbackIconSize} strokeWidth={1.75} />
           </span>
         )}
       </div>
@@ -119,7 +120,9 @@ export default function AppIcon({
   // 3. Category emoji avatar fallback
   return (
     <div className={containerClass}>
-      <span className="app-icon-fallback-emoji">{fallbackIcon}</span>
+      <span className="app-icon-fallback-emoji">
+        <FallbackIcon size={fallbackIconSize} strokeWidth={1.75} />
+      </span>
     </div>
   );
 }

@@ -13,6 +13,7 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^4.22.2",
+    "lucide-react": "^1.34.0",
     "node-pty": "^1.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

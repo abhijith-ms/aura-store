@@ -1,3 +1,9 @@
+import {
+  Settings as SettingsIcon, Globe, Music, Gamepad2, Wrench,
+  Monitor, MessageCircle, Container, Package, GitBranch, Type,
+  Video, Palette, Terminal, Lock, Cloud, Zap, Waves,
+} from 'lucide-react';
+
 const getApiBase = () => {
   if (import.meta.env?.DEV) return 'http://localhost:3001';
   return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
@@ -422,10 +428,10 @@ export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
 
 
 export const FEATURED = [
-  { name: 'zen-browser-bin', icon: '🌊', label: 'Featured Browser' },
-  { name: 'visual-studio-code-bin', icon: '🖥️', label: 'Popular IDE' },
-  { name: 'spotify', icon: '🎵', label: 'Music & Streaming' },
-  { name: 'discord', icon: '💬', label: 'Voice & Chat' },
+  { name: 'zen-browser-bin', icon: Waves, label: 'Featured Browser' },
+  { name: 'visual-studio-code-bin', icon: Monitor, label: 'Popular IDE' },
+  { name: 'spotify', icon: Music, label: 'Music & Streaming' },
+  { name: 'discord', icon: MessageCircle, label: 'Voice & Chat' },
 ];
 
 export const TRENDING_NAMES = [
@@ -451,7 +457,7 @@ export const CATEGORIES = [
   {
     id: 'development',
     label: 'Development',
-    icon: '⚙️',
+    icon: SettingsIcon,
     title: 'Developer Tools & IDEs',
     subtitle: 'High-performance code editors, compilers, language servers, and dev environments',
     packages: ['visual-studio-code-bin', 'cursor-bin', 'kiro-ide', 'antigravity-ide', 'sublime-text-4', 'postman-bin', 'insomnia-bin', 'docker-desktop'],
@@ -460,7 +466,7 @@ export const CATEGORIES = [
   {
     id: 'browsers',
     label: 'Browsers',
-    icon: '🌐',
+    icon: Globe,
     title: 'Web Browsers',
     subtitle: 'Privacy-focused, lightweight, and modern browsing engines for Arch Linux',
     packages: ['zen-browser-bin', 'google-chrome', 'brave-bin', 'floorp-bin', 'microsoft-edge-stable-bin', 'tor-browser-bin', 'vivaldi', 'librewolf-bin'],
@@ -469,7 +475,7 @@ export const CATEGORIES = [
   {
     id: 'media',
     label: 'Media & Audio',
-    icon: '🎵',
+    icon: Music,
     title: 'Audio, Video & Creation',
     subtitle: 'Music streaming, media players, streaming studios, and content creation suites',
     packages: ['spotify', 'stremio', 'obs-studio-git', 'spicetify-cli', 'cider', 'vlc-git', 'kodi', 'audacity'],
@@ -478,7 +484,7 @@ export const CATEGORIES = [
   {
     id: 'gaming',
     label: 'Gaming',
-    icon: '🎮',
+    icon: Gamepad2,
     title: 'Gaming & Emulation',
     subtitle: 'Game launchers, compatibility layers, and gaming tools',
     packages: ['heroic-games-launcher-bin', 'lutris-git', 'prismlauncher-bin', 'bottles', 'retroarch', 'game-devices-udev', 'proton-ge-custom-bin'],
@@ -487,7 +493,7 @@ export const CATEGORIES = [
   {
     id: 'tools',
     label: 'System Tools',
-    icon: '🛠️',
+    icon: Wrench,
     title: 'System Utilities & CLI',
     subtitle: 'Package helpers, performance monitors, terminal emulators, and system utilities',
     packages: ['paru', 'yay', 'btop', 'fastfetch-git', 'timeshift', 'btrfs-assistant', 'alacritty-git', 'kitty-git'],
@@ -497,22 +503,22 @@ export const CATEGORIES = [
 
 export const getPackageIcon = (name) => {
   const n = name.toLowerCase();
-  if (n.includes('code') || n.includes('vscode') || n.includes('ide') || n.includes('vim') || n.includes('emacs') || n.includes('cursor')) return '🖥️';
-  if (n.includes('browser') || n.includes('chrome') || n.includes('firefox') || n.includes('zen') || n.includes('brave') || n.includes('floorp') || n.includes('edge')) return '🌐';
-  if (n.includes('spotify') || n.includes('music') || n.includes('vlc') || n.includes('audio') || n.includes('cider') || n.includes('spicetify')) return '🎵';
-  if (n.includes('discord') || n.includes('telegram') || n.includes('signal') || n.includes('chat') || n.includes('slack')) return '💬';
-  if (n.includes('game') || n.includes('steam') || n.includes('lutris') || n.includes('heroic') || n.includes('prism') || n.includes('bottle')) return '🎮';
-  if (n.includes('docker') || n.includes('container') || n.includes('kube')) return '🐳';
-  if (n.includes('node') || n.includes('npm') || n.includes('python') || n.includes('rust') || n.includes('go')) return '📦';
-  if (n.includes('git') || n.includes('github') || n.includes('gitlab')) return '🔀';
-  if (n.includes('font') || n.includes('nerd')) return '🔤';
-  if (n.includes('video') || n.includes('obs') || n.includes('stream') || n.includes('stremio')) return '📹';
-  if (n.includes('photo') || n.includes('image') || n.includes('gimp') || n.includes('inkscape')) return '🎨';
-  if (n.includes('terminal') || n.includes('shell') || n.includes('zsh') || n.includes('bash') || n.includes('alacritty') || n.includes('kitty')) return '⬛';
-  if (n.includes('vpn') || n.includes('proxy') || n.includes('network') || n.includes('tor')) return '🔒';
-  if (n.includes('backup') || n.includes('sync') || n.includes('cloud') || n.includes('timeshift')) return '☁️';
-  if (n.includes('paru') || n.includes('yay') || n.includes('pacman')) return '⚡';
-  return '📦';
+  if (n.includes('code') || n.includes('vscode') || n.includes('ide') || n.includes('vim') || n.includes('emacs') || n.includes('cursor')) return Monitor;
+  if (n.includes('browser') || n.includes('chrome') || n.includes('firefox') || n.includes('zen') || n.includes('brave') || n.includes('floorp') || n.includes('edge')) return Globe;
+  if (n.includes('spotify') || n.includes('music') || n.includes('vlc') || n.includes('audio') || n.includes('cider') || n.includes('spicetify')) return Music;
+  if (n.includes('discord') || n.includes('telegram') || n.includes('signal') || n.includes('chat') || n.includes('slack')) return MessageCircle;
+  if (n.includes('game') || n.includes('steam') || n.includes('lutris') || n.includes('heroic') || n.includes('prism') || n.includes('bottle')) return Gamepad2;
+  if (n.includes('docker') || n.includes('container') || n.includes('kube')) return Container;
+  if (n.includes('node') || n.includes('npm') || n.includes('python') || n.includes('rust') || n.includes('go')) return Package;
+  if (n.includes('git') || n.includes('github') || n.includes('gitlab')) return GitBranch;
+  if (n.includes('font') || n.includes('nerd')) return Type;
+  if (n.includes('video') || n.includes('obs') || n.includes('stream') || n.includes('stremio')) return Video;
+  if (n.includes('photo') || n.includes('image') || n.includes('gimp') || n.includes('inkscape')) return Palette;
+  if (n.includes('terminal') || n.includes('shell') || n.includes('zsh') || n.includes('bash') || n.includes('alacritty') || n.includes('kitty')) return Terminal;
+  if (n.includes('vpn') || n.includes('proxy') || n.includes('network') || n.includes('tor')) return Lock;
+  if (n.includes('backup') || n.includes('sync') || n.includes('cloud') || n.includes('timeshift')) return Cloud;
+  if (n.includes('paru') || n.includes('yay') || n.includes('pacman')) return Zap;
+  return Package;
 };
 
 export const formatNumber = (n) => {

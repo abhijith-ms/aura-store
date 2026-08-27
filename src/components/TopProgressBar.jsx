@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { ArrowDown, X, ChevronUp, ChevronDown } from 'lucide-react';
 import AppIcon from './AppIcon';
 
 export default function TopProgressBar({
@@ -67,7 +68,7 @@ export default function TopProgressBar({
         <div className="top-progress-right">
           {parsedStatus.speed && (
             <div className="top-progress-speed" title="Measured Download Rate">
-              <span className="top-progress-speed-icon">↓</span>
+              <span className="top-progress-speed-icon" style={{ display: 'inline-flex' }}><ArrowDown size={11} strokeWidth={2.5} /></span>
               <span>{parsedStatus.speed}</span>
             </div>
           )}
@@ -82,9 +83,9 @@ export default function TopProgressBar({
             className="btn btn-ghost btn-sm"
             onClick={onCancel}
             title="Cancel installation"
-            style={{ padding: '3px 8px', fontSize: 11, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.2)' }}
+            style={{ padding: '3px 8px', fontSize: 11, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
-            ✕ Cancel
+            <X size={11} strokeWidth={2} /> Cancel
           </button>
 
           <button
@@ -95,7 +96,7 @@ export default function TopProgressBar({
           >
             <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}>$_</span>
             <span>Logs</span>
-            <span style={{ fontSize: 8 }}>{terminalOpen ? '▲' : '▼'}</span>
+            <span style={{ display: 'inline-flex' }}>{terminalOpen ? <ChevronUp size={10} strokeWidth={2} /> : <ChevronDown size={10} strokeWidth={2} />}</span>
           </button>
         </div>
       </div>

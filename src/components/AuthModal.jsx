@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function AuthModal({ authRequest, onRespond }) {
   const [password, setPassword] = useState('');
@@ -76,11 +77,10 @@ export default function AuthModal({ authRequest, onRespond }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 22,
               flexShrink: 0,
             }}
           >
-            🔒
+            <Lock size={20} strokeWidth={2} color="var(--accent)" />
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 16.5, color: 'var(--text-primary)' }}>
@@ -131,7 +131,7 @@ export default function AuthModal({ authRequest, onRespond }) {
               }}
               title={showPassword ? 'Hide password' : 'Show password'}
             >
-              {showPassword ? '🙈' : '👁️'}
+              {showPassword ? <EyeOff size={16} strokeWidth={2} /> : <Eye size={16} strokeWidth={2} />}
             </button>
           </div>
 

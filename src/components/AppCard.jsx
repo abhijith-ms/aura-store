@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AlertTriangle, Check, Package, Star, TrendingUp, ChevronDown } from 'lucide-react';
 import { formatNumber, getAppDisplayName } from '../services/aurApi';
 import AppIcon from './AppIcon';
 
@@ -46,7 +47,7 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
         ) : isFlathub ? (
           <span className="chip chip-indigo" style={{ fontSize: 10 }} title="Sandboxed app via Flathub">Flathub</span>
         ) : pkg.OutOfDate && (
-          <span className="chip chip-orange" style={{ fontSize: 10 }} title="Flagged out of date in AUR">⚠</span>
+          <span className="chip chip-orange" style={{ fontSize: 10, display: 'flex', alignItems: 'center' }} title="Flagged out of date in AUR"><AlertTriangle size={11} strokeWidth={2} /></span>
         )}
       </div>
 
@@ -56,22 +57,22 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
         <div className="card-stats">
           {isOfficial ? (
             <div className="stat" title="Official Arch repository">
-              <span>✓</span>
+              <Check size={12} strokeWidth={2} />
               <span>Official</span>
             </div>
           ) : isFlathub ? (
             <div className="stat" title="Sandboxed via Flatpak">
-              <span>📦</span>
+              <Package size={12} strokeWidth={2} />
               <span>Sandboxed</span>
             </div>
           ) : (
             <>
               <div className="stat" title="AUR Votes">
-                <span>★</span>
+                <Star size={12} strokeWidth={2} />
                 <span>{formatNumber(pkg.NumVotes)}</span>
               </div>
               <div className="stat" title="Popularity Score">
-                <span>📈</span>
+                <TrendingUp size={12} strokeWidth={2} />
                 <span>{pkg.Popularity ? pkg.Popularity.toFixed(1) : '0'}</span>
               </div>
             </>
@@ -83,8 +84,9 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
               <button
                 className="btn btn-primary btn-sm"
                 onClick={(e) => { e.stopPropagation(); setOpenDropdown(o => !o); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
               >
-                Open ▾
+                Open <ChevronDown size={13} strokeWidth={2} />
               </button>
               {openDropdown && (
                 <div
@@ -115,7 +117,9 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
             </button>
           )
         ) : isInstalled ? (
-          <button className="btn btn-installed btn-sm" onClick={handleInstallClick}>✓ Installed</button>
+          <button className="btn btn-installed btn-sm" onClick={handleInstallClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Check size={13} strokeWidth={2} /> Installed
+          </button>
         ) : (
           <button className="btn btn-primary btn-sm" onClick={handleInstallClick}>Install</button>
         )}

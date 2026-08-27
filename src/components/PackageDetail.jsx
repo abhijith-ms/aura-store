@@ -1,5 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  ArrowLeft, Package, Check, AlertTriangle, TrendingUp, Star, X,
+  ChevronDown, ChevronUp, Trash2, Circle, CircleDot, Download, Lock,
+  ExternalLink, Copy,
+} from 'lucide-react';
 import { getPkgbuild, openDownloadsFolder, unlockPacman, formatNumber } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
 import { createPackageViewModel } from '../services/packageViewModel';
@@ -86,11 +91,11 @@ export default function PackageDetail({
     return (
       <div className="detail-page">
         <button className="detail-back-btn" onClick={onBack} title="Back (Esc)">
-          <span>←</span>
+          <ArrowLeft size={14} strokeWidth={2} />
           <span>Back</span>
         </button>
         <div className="empty-state" style={{ marginTop: 40 }}>
-          <div className="empty-icon">📦</div>
+          <div className="empty-icon"><Package size={28} strokeWidth={1.75} /></div>
           <div className="empty-title">Package unavailable</div>
           <div className="empty-desc">Package information is currently missing or could not be loaded.</div>
           <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={onBack}>
@@ -151,7 +156,7 @@ export default function PackageDetail({
     <div className="detail-page" style={{ '--package-accent': brandColor || 'var(--accent)' }}>
       {/* Back Navigation */}
       <button className="detail-back-btn" onClick={onBack} title="Back (Esc)">
-        <span>←</span>
+        <ArrowLeft size={14} strokeWidth={2} />
         <span>Back</span>
       </button>
 
@@ -180,16 +185,16 @@ export default function PackageDetail({
                 {vm.source.label}
               </span>
               {isFlathub && vm.metadata.verified && (
-                <span className="chip chip-green" title="Verified by the app's developer on Flathub">✓ Verified</span>
+                <span className="chip chip-green" title="Verified by the app's developer on Flathub" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={11} strokeWidth={2.5} /> Verified</span>
               )}
               {vm.classification.role !== 'general' && (
                 <span className="chip chip-gray" title={`Classification: ${vm.classification.label}`}>
                   {vm.classification.label}
                 </span>
               )}
-              {vm.state.installed && <span className="chip chip-green">✓ Installed</span>}
+              {vm.state.installed && <span className="chip chip-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={11} strokeWidth={2.5} /> Installed</span>}
               {vm.state.updateAvailable && <span className="chip chip-indigo">Update available</span>}
-              {vm.metadata.outOfDate && <span className="chip chip-orange">⚠ Out of date in AUR</span>}
+              {vm.metadata.outOfDate && <span className="chip chip-orange" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} strokeWidth={2} /> Out of date in AUR</span>}
             </div>
           </div>
         </div>
@@ -199,18 +204,18 @@ export default function PackageDetail({
           <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
             {isOfficial ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
-                <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓</span>
+                <Check size={14} strokeWidth={2.5} style={{ color: 'var(--success)' }} />
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Signed by {vm.source.label}</span>
               </div>
             ) : isFlathub ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <span>📦</span>
+                  <Package size={14} strokeWidth={2} />
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Sandboxed</span>
                 </div>
                 {vm.metadata.installsLastMonth > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
-                    <span>📈</span>
+                    <TrendingUp size={14} strokeWidth={2} />
                     <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatNumber(vm.metadata.installsLastMonth)}</span>
                     <span>installs/month</span>
                   </div>
@@ -219,12 +224,12 @@ export default function PackageDetail({
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <span style={{ color: 'var(--warning)', fontWeight: 600 }}>★</span>
+                  <Star size={14} strokeWidth={2} style={{ color: 'var(--warning)' }} />
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.votesFormatted}</span>
                   <span>votes</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <span>📈</span>
+                  <TrendingUp size={14} strokeWidth={2} />
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.popularity}</span>
                   <span>popularity</span>
                 </div>
@@ -244,7 +249,7 @@ export default function PackageDetail({
                   style={{ color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.2)' }}
                   title="Cancel this installation"
                 >
-                  ✕ Cancel
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={13} strokeWidth={2} /> Cancel</span>
                 </button>
                 <button className="btn btn-ghost btn-sm" onClick={onToggleTerminal}>
                   Logs
@@ -264,8 +269,9 @@ export default function PackageDetail({
                         ref={openButtonRef}
                         className="btn btn-primary btn-lg"
                         onClick={toggleDropdown}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       >
-                        Open ▾
+                        Open <ChevronDown size={14} strokeWidth={2} />
                       </button>
                       {openDropdown && dropdownPos && createPortal(
                         <div
@@ -315,8 +321,8 @@ export default function PackageDetail({
                     </button>
                   )
                 )}
-                <button className="btn btn-danger btn-lg" onClick={handleRemove}>
-                  🗑 Remove
+                <button className="btn btn-danger btn-lg" onClick={handleRemove} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Trash2 size={15} strokeWidth={2} /> Remove
                 </button>
               </div>
             ) : (
@@ -331,19 +337,19 @@ export default function PackageDetail({
         {isInstalling && (
           <div className="build-tracker">
             <div className={`build-step ${stage >= 1 ? (stage === 1 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{stage > 1 ? '✓' : '●'}</span>
+              <span className="build-step-bullet">{stage > 1 ? <Check size={12} strokeWidth={2.5} /> : <CircleDot size={12} strokeWidth={2} />}</span>
               <span>Resolving package dependencies</span>
             </div>
             <div className={`build-step ${stage >= 2 ? (stage === 2 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{stage > 2 ? '✓' : stage === 2 ? '●' : '○'}</span>
+              <span className="build-step-bullet">{stage > 2 ? <Check size={12} strokeWidth={2.5} /> : stage === 2 ? <CircleDot size={12} strokeWidth={2} /> : <Circle size={12} strokeWidth={2} />}</span>
               <span>Retrieving source archives & signatures</span>
             </div>
             <div className={`build-step ${stage >= 3 ? (stage === 3 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{stage > 3 ? '✓' : stage === 3 ? '●' : '○'}</span>
+              <span className="build-step-bullet">{stage > 3 ? <Check size={12} strokeWidth={2.5} /> : stage === 3 ? <CircleDot size={12} strokeWidth={2} /> : <Circle size={12} strokeWidth={2} />}</span>
               <span>Compiling & building via makepkg</span>
             </div>
             <div className={`build-step ${stage >= 4 ? (stage === 4 ? 'active' : 'completed') : ''}`}>
-              <span className="build-step-bullet">{stage > 4 ? '✓' : stage === 4 ? '●' : '○'}</span>
+              <span className="build-step-bullet">{stage > 4 ? <Check size={12} strokeWidth={2.5} /> : stage === 4 ? <CircleDot size={12} strokeWidth={2} /> : <Circle size={12} strokeWidth={2} />}</span>
               <span>Finalizing installation via pacman</span>
             </div>
           </div>
@@ -356,7 +362,7 @@ export default function PackageDetail({
           {lastError.code === 'SOURCE_MISSING_MANUAL_DOWNLOAD' ? (
             <div>
               <div className="detail-section-title">
-                <span style={{ color: 'var(--warning)' }}>📥 Manual Download Source Required</span>
+                <span style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Download size={15} strokeWidth={2} /> Manual Download Source Required</span>
                 <span className="chip chip-orange">Proprietary EULA</span>
               </div>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -374,7 +380,7 @@ export default function PackageDetail({
           ) : lastError.code === 'PACMAN_LOCKED' ? (
             <div>
               <div className="detail-section-title">
-                <span style={{ color: 'var(--danger)' }}>🔒 Pacman Database Locked</span>
+                <span style={{ color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Lock size={15} strokeWidth={2} /> Pacman Database Locked</span>
                 <span className="chip chip-red">Lock Conflict</span>
               </div>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -389,7 +395,7 @@ export default function PackageDetail({
           ) : (
             <div>
               <div className="detail-section-title">
-                <span style={{ color: 'var(--danger)' }}>✕ Couldn't Install {vm.displayName}</span>
+                <span style={{ color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><X size={15} strokeWidth={2} /> Couldn't Install {vm.displayName}</span>
                 <span className="chip chip-red">{lastError.code || 'BUILD_FAILED'}</span>
               </div>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
@@ -440,8 +446,9 @@ export default function PackageDetail({
               className="btn btn-ghost btn-sm"
               style={{ fontSize: 11.5 }}
               onClick={() => setShowReviewDetails(d => !d)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              {showReviewDetails ? 'Hide details' : 'Show details ▾'}
+              {showReviewDetails ? 'Hide details' : <>Show details <ChevronDown size={12} strokeWidth={2} /></>}
             </button>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost" onClick={() => setConfirmingInstall(false)}>
@@ -472,11 +479,11 @@ export default function PackageDetail({
                   <span
                     key={d}
                     className={`chip ${isDepInstalled ? 'chip-green' : 'chip-indigo'}`}
-                    style={{ cursor: 'pointer', padding: '4px 10px', fontSize: 12 }}
+                    style={{ cursor: 'pointer', padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                     title={isDepInstalled ? `${d} (Installed on system)` : `Inspect ${d}`}
                     onClick={() => onSelectDependency && onSelectDependency(cleanDep)}
                   >
-                    {isDepInstalled ? `✓ ${d}` : `${d} ↗`}
+                    {isDepInstalled ? <><Check size={11} strokeWidth={2} /> {d}</> : <>{d} <ExternalLink size={11} strokeWidth={2} /></>}
                   </span>
                 );
               })}
@@ -569,8 +576,8 @@ export default function PackageDetail({
           {vm.upstream.homepage && (
             <div className="info-row">
               <span className="info-label">Upstream Website</span>
-              <a className="info-link" href={vm.upstream.homepage} target="_blank" rel="noreferrer">
-                {vm.upstream.homepage} ↗
+              <a className="info-link" href={vm.upstream.homepage} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {vm.upstream.homepage} <ExternalLink size={12} strokeWidth={2} />
               </a>
             </div>
           )}
@@ -578,8 +585,8 @@ export default function PackageDetail({
           {vm.upstream.aur && (
             <div className="info-row">
               <span className="info-label">AUR Recipe Page</span>
-              <a className="info-link" href={vm.upstream.aur} target="_blank" rel="noreferrer">
-                aur.archlinux.org/packages/{vm.name} ↗
+              <a className="info-link" href={vm.upstream.aur} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                aur.archlinux.org/packages/{vm.name} <ExternalLink size={12} strokeWidth={2} />
               </a>
             </div>
           )}
@@ -587,8 +594,8 @@ export default function PackageDetail({
           {vm.upstream.flathub && (
             <div className="info-row">
               <span className="info-label">Flathub Page</span>
-              <a className="info-link" href={vm.upstream.flathub} target="_blank" rel="noreferrer">
-                flathub.org/apps/{vm.raw?.AppId} ↗
+              <a className="info-link" href={vm.upstream.flathub} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                flathub.org/apps/{vm.raw?.AppId} <ExternalLink size={12} strokeWidth={2} />
               </a>
             </div>
           )}
@@ -601,8 +608,8 @@ export default function PackageDetail({
       <div className="detail-section">
         <div className="detail-section-title" style={{ cursor: 'pointer' }} onClick={togglePkgbuild}>
           <span>Build Transparency & PKGBUILD</span>
-          <button className="btn btn-ghost btn-sm">
-            {showPkgbuild ? 'Hide PKGBUILD ▲' : 'Show PKGBUILD ▾'}
+          <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {showPkgbuild ? <>Hide PKGBUILD <ChevronUp size={13} strokeWidth={2} /></> : <>Show PKGBUILD <ChevronDown size={13} strokeWidth={2} /></>}
           </button>
         </div>
 
@@ -617,8 +624,8 @@ export default function PackageDetail({
             ) : pkgbuild ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={handleCopyPkgbuild}>
-                    {copied ? '✓ Copied' : '📋 Copy PKGBUILD'}
+                  <button className="btn btn-ghost btn-sm" onClick={handleCopyPkgbuild} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {copied ? <><Check size={13} strokeWidth={2} /> Copied</> : <><Copy size={13} strokeWidth={2} /> Copy PKGBUILD</>}
                   </button>
                 </div>
                 <pre className="code-block">{pkgbuild}</pre>

@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
+  RefreshCw, HardDrive, Package, Gauge, Eraser, Check,
+  Settings as SettingsIcon, Moon, Sun,
+} from 'lucide-react';
+import {
   getStorageMetrics,
   cleanCache,
   cleanOrphans,
@@ -134,14 +138,14 @@ export default function SettingsTab({ addToast }) {
             Manage system caches, orphan packages, and app preferences
           </p>
         </div>
-        <button className="btn btn-ghost" onClick={loadData} title="Refresh metrics">
-          <span>🔄 Refresh</span>
+        <button className="btn btn-ghost" onClick={loadData} title="Refresh metrics" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw size={14} strokeWidth={2} /> Refresh
         </button>
       </div>
 
       {/* ── Storage Dashboard Grid ── */}
-      <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px 0', color: 'var(--text-primary)' }}>
-        💾 Storage & System Caches
+      <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 14px 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <HardDrive size={16} strokeWidth={2} /> Storage & System Caches
       </h3>
 
       <div className="rail-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginBottom: 28 }}>
@@ -158,10 +162,9 @@ export default function SettingsTab({ addToast }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 20,
               }}
             >
-              📦
+              <Package size={20} strokeWidth={1.75} />
             </div>
             <div className="card-title-block" style={{ flex: 1 }}>
               <div className="card-name">AUR Build Cache</div>
@@ -198,10 +201,9 @@ export default function SettingsTab({ addToast }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 20,
               }}
             >
-              🗄️
+              <HardDrive size={20} strokeWidth={1.75} />
             </div>
             <div className="card-title-block" style={{ flex: 1 }}>
               <div className="card-name">Pacman Download Cache</div>
@@ -238,10 +240,9 @@ export default function SettingsTab({ addToast }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 20,
               }}
             >
-              🖥️
+              <Gauge size={20} strokeWidth={1.75} />
             </div>
             <div className="card-title-block" style={{ flex: 1 }}>
               <div className="card-name">Root Disk Usage</div>
@@ -273,8 +274,8 @@ export default function SettingsTab({ addToast }) {
       <div className="detail-section" style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-              🧹 Orphan Packages ({orphans.length})
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Eraser size={16} strokeWidth={2} /> Orphan Packages ({orphans.length})
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
               Unneeded dependencies installed by packages that have since been removed.
@@ -305,8 +306,8 @@ export default function SettingsTab({ addToast }) {
         </div>
 
         {orphans.length === 0 ? (
-          <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-            ✓ No orphan packages found. Your system dependencies are clean!
+          <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Check size={14} strokeWidth={2} /> No orphan packages found. Your system dependencies are clean!
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -357,8 +358,8 @@ export default function SettingsTab({ addToast }) {
 
       {/* ── Preferences & App Settings ── */}
       <div className="detail-section" style={{ marginBottom: 28 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 16px 0', color: 'var(--text-primary)' }}>
-          ⚙️ App Preferences
+        <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 16px 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <SettingsIcon size={16} strokeWidth={2} /> App Preferences
         </h3>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -417,8 +418,8 @@ export default function SettingsTab({ addToast }) {
                 Switch between Dark, Light, or follow System appearance.
               </div>
             </div>
-            <button className="btn btn-ghost" onClick={toggleTheme} style={{ fontSize: 13 }}>
-              {theme === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+            <button className="btn btn-ghost" onClick={toggleTheme} style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {theme === 'dark' ? <><Moon size={14} strokeWidth={2} /> Dark Mode</> : <><Sun size={14} strokeWidth={2} /> Light Mode</>}
             </button>
           </div>
         </div>

@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
+import { Compass, Check, ArrowUp, History, Settings as SettingsIcon, Monitor, Moon, Sun, Palette, Zap, ChevronDown } from 'lucide-react';
 import { CATEGORIES } from '../services/aurApi';
 import { useTheme } from '../context/ThemeContext';
 
 const NAV = [
-  { id: 'explore', icon: '✦', label: 'Explore' },
-  { id: 'installed', icon: '✓', label: 'Installed' },
-  { id: 'updates', icon: '↑', label: 'Updates' },
-  { id: 'activity', icon: '📜', label: 'Activity' },
-  { id: 'settings', icon: '⚙️', label: 'Settings' },
+  { id: 'explore', icon: Compass, label: 'Explore' },
+  { id: 'installed', icon: Check, label: 'Installed' },
+  { id: 'updates', icon: ArrowUp, label: 'Updates' },
+  { id: 'activity', icon: History, label: 'Activity' },
+  { id: 'settings', icon: SettingsIcon, label: 'Settings' },
 ];
 
 
@@ -23,9 +24,9 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
   };
 
   const themeIcons = {
-    system: '💻',
-    dark: '🌙',
-    light: '☀️',
+    system: Monitor,
+    dark: Moon,
+    light: Sun,
   };
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
           className={`nav-item ${active === item.id ? 'active' : ''}`}
           onClick={() => onNav(item.id)}
         >
-          <span className="nav-icon">{item.icon}</span>
+          <span className="nav-icon"><item.icon size={15} strokeWidth={2} /></span>
           <span>{item.label}</span>
           {item.id === 'installed' && installedCount > 0 && (
             <span className="badge green">{installedCount}</span>
@@ -70,7 +71,7 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
           className={`nav-item ${active === cat.id ? 'active' : ''}`}
           onClick={() => onNav(cat.id)}
         >
-          <span className="nav-icon">{cat.icon}</span>
+          <span className="nav-icon"><cat.icon size={15} strokeWidth={2} /></span>
           <span>{cat.label}</span>
         </div>
       ))}
@@ -83,33 +84,36 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
             onClick={() => setAppearanceOpen(o => !o)}
             title="Appearance setting"
           >
-            <span>☼ Appearance</span>
-            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-              {themeIcons[themeSetting]} {themeLabels[themeSetting]} ▾
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Palette size={13} strokeWidth={2} /> Appearance</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600, color: 'var(--text-primary)' }}>
+              {(() => { const Icon = themeIcons[themeSetting]; return <Icon size={13} strokeWidth={2} />; })()} {themeLabels[themeSetting]} <ChevronDown size={12} strokeWidth={2} />
             </span>
           </button>
 
           {appearanceOpen && (
             <div className="appearance-menu">
-              {['system', 'light', 'dark'].map(mode => (
-                <button
-                  key={mode}
-                  className={`appearance-option ${themeSetting === mode ? 'active' : ''}`}
-                  onClick={() => {
-                    setThemeSetting(mode);
-                    setAppearanceOpen(false);
-                  }}
-                >
-                  <span>{themeIcons[mode]} {themeLabels[mode]}</span>
-                  {themeSetting === mode && <span style={{ fontSize: 10 }}>✓</span>}
-                </button>
-              ))}
+              {['system', 'light', 'dark'].map(mode => {
+                const Icon = themeIcons[mode];
+                return (
+                  <button
+                    key={mode}
+                    className={`appearance-option ${themeSetting === mode ? 'active' : ''}`}
+                    onClick={() => {
+                      setThemeSetting(mode);
+                      setAppearanceOpen(false);
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon size={13} strokeWidth={2} /> {themeLabels[mode]}</span>
+                    {themeSetting === mode && <Check size={12} strokeWidth={2} />}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
         <div className="nav-item" style={{ opacity: 0.65, cursor: 'default', padding: '4px 8px', fontSize: 11 }}>
-          <span className="nav-icon" style={{ fontSize: 11 }}>⚡</span>
+          <span className="nav-icon"><Zap size={12} strokeWidth={2} /></span>
           <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>paru / AUR v5</span>
         </div>
       </div>

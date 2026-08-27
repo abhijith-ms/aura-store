@@ -1,4 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import {
+  Check, X, AlertTriangle, Info, History, Ban, ChevronUp, ChevronDown,
+  ExternalLink, Package, Sparkles, ArrowRight, RotateCcw, Lock, SearchX,
+  Hourglass, Search,
+} from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AppCard from './components/AppCard';
 import PackageDetail from './components/PackageDetail';
@@ -48,7 +53,9 @@ function ToastStack({ toasts }) {
     <div className="toast-stack">
       {toasts.map(t => (
         <div key={t.id} className={`toast ${t.type}`}>
-          <span>{t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : t.type === 'warning' ? '⚠' : 'ℹ'}</span>
+          <span style={{ display: 'inline-flex' }}>
+            {t.type === 'success' ? <Check size={15} strokeWidth={2.5} /> : t.type === 'error' ? <X size={15} strokeWidth={2.5} /> : t.type === 'warning' ? <AlertTriangle size={15} strokeWidth={2} /> : <Info size={15} strokeWidth={2} />}
+          </span>
           <span>{t.message}</span>
         </div>
       ))}
@@ -87,7 +94,7 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
   if (!history || history.length === 0) {
     return (
       <div className="empty-state">
-        <div className="empty-icon">📜</div>
+        <div className="empty-icon"><History size={26} strokeWidth={1.75} /></div>
         <div className="empty-title">No recent activity</div>
         <div className="empty-desc">Completed, failed, and cancelled package operations will be logged here.</div>
       </div>
@@ -142,9 +149,9 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{item.pkg}</span>
-                    {item.verification?.status === 'verified' && <span className="chip chip-green" style={{ fontSize: 10, padding: '1px 5px' }}>✓ Verified</span>}
-                    {item.verification?.status === 'not_verified' && <span className="chip chip-red" style={{ fontSize: 10, padding: '1px 5px' }}>✕ Not Verified</span>}
-                    {item.verification?.status === 'verification_failed' && <span className="chip chip-red" style={{ fontSize: 10, padding: '1px 5px' }}>⚠ Verification Failed</span>}
+                    {item.verification?.status === 'verified' && <span className="chip chip-green" style={{ fontSize: 10, padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Check size={9} strokeWidth={2.5} /> Verified</span>}
+                    {item.verification?.status === 'not_verified' && <span className="chip chip-red" style={{ fontSize: 10, padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: 3 }}><X size={9} strokeWidth={2.5} /> Not Verified</span>}
+                    {item.verification?.status === 'verification_failed' && <span className="chip chip-red" style={{ fontSize: 10, padding: '1px 5px', display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={9} strokeWidth={2} /> Verification Failed</span>}
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 2 }}>
                     {item.action === 'remove' ? 'Removed package' : item.action === 'update' ? 'Updated package' : 'Installed package'} · {timeLabel}
@@ -153,13 +160,13 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
 
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {isDone ? (
-                    <span className="chip chip-green">✓ Completed</span>
+                    <span className="chip chip-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={11} strokeWidth={2.5} /> Completed</span>
                   ) : isCancelled ? (
-                    <span className="chip chip-gray">⊘ Cancelled</span>
+                    <span className="chip chip-gray" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ban size={11} strokeWidth={2} /> Cancelled</span>
                   ) : (
-                    <span className="chip chip-red">✕ Failed</span>
+                    <span className="chip chip-red" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={11} strokeWidth={2.5} /> Failed</span>
                   )}
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{isExpanded ? '▲' : '▼'}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex' }}>{isExpanded ? <ChevronUp size={13} strokeWidth={2} /> : <ChevronDown size={13} strokeWidth={2} />}</span>
                 </div>
               </div>
 
@@ -184,7 +191,7 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
                         onSelectPkg({ Name: item.pkg, Description: 'AUR Package' });
                       }}
                     >
-                      View Package ↗
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>View Package <ExternalLink size={12} strokeWidth={2} /></span>
                     </button>
                   </div>
 
@@ -201,7 +208,7 @@ function ActivityTab({ history, onSelectPkg, onClearHistory }) {
                       fontSize: 11.5,
                     }}>
                       <span style={{ fontWeight: 600 }}>
-                        {item.verification.status === 'verified' ? '✓ Verified' : item.verification.status === 'not_verified' ? '✕ Not Verified' : '⚠ Verification Failed'}
+                        {item.verification.status === 'verified' ? <><Check size={12} strokeWidth={2.5} /> Verified</> : item.verification.status === 'not_verified' ? <><X size={12} strokeWidth={2.5} /> Not Verified</> : <><AlertTriangle size={12} strokeWidth={2} /> Verification Failed</>}
                       </span>
                       <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                         method: {item.verification.method}
@@ -248,7 +255,7 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
   if (packages.length === 0) {
     return (
       <div className="empty-state">
-        <div className="empty-icon">📦</div>
+        <div className="empty-icon"><Package size={26} strokeWidth={1.75} /></div>
         <div className="empty-title">No installed packages</div>
         <div className="empty-desc">Packages you install from the AUR will appear here.</div>
       </div>
@@ -372,7 +379,7 @@ function UpdatesTab({
   if (updates.length === 0) {
     return (
       <div className="empty-state">
-        <div className="empty-icon">✨</div>
+        <div className="empty-icon"><Sparkles size={26} strokeWidth={1.75} /></div>
         <div className="empty-title">You're up to date</div>
         <div className="empty-desc">No AUR package updates are currently available.</div>
       </div>
@@ -444,7 +451,7 @@ function UpdatesTab({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{displayName}</div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  {u.name}: <span style={{ color: 'var(--text-muted)' }}>{u.current}</span> → <span style={{ color: 'var(--success)', fontWeight: 600 }}>{u.latest}</span>
+                  {u.name}: <span style={{ color: 'var(--text-muted)' }}>{u.current}</span> <ArrowRight size={11} strokeWidth={2} style={{ verticalAlign: 'middle' }} /> <span style={{ color: 'var(--success)', fontWeight: 600 }}>{u.latest}</span>
                 </div>
               </div>
 
@@ -454,10 +461,10 @@ function UpdatesTab({
                   <div className="spinner-apple" /> Building…
                 </span>
               ) : status === 'done' ? (
-                <span className="chip chip-green" style={{ padding: '4px 8px' }}>✓ Updated</span>
+                <span className="chip chip-green" style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} strokeWidth={2.5} /> Updated</span>
               ) : status === 'failed' ? (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span className="chip chip-red" style={{ padding: '4px 8px' }}>✕ Failed</span>
+                  <span className="chip chip-red" style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} strokeWidth={2.5} /> Failed</span>
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={onShowLogs}
@@ -475,7 +482,7 @@ function UpdatesTab({
                   </button>
                 </div>
               ) : status === 'waiting' ? (
-                <span className="chip chip-gray" style={{ padding: '4px 8px' }}>⏳ Queued</span>
+                <span className="chip chip-gray" style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Hourglass size={12} strokeWidth={2} /> Queued</span>
               ) : (
                 <button
                   className="btn btn-ghost btn-sm"
@@ -935,7 +942,7 @@ function MainApp() {
         {/* Header with Adaptive Controls */}
         <div className="header">
           <div className="search-wrapper" style={{ position: 'relative' }}>
-            <span className="search-icon">⌕</span>
+            <span className="search-icon" style={{ display: 'inline-flex' }}><Search size={15} strokeWidth={2} /></span>
             <input
               ref={searchInputRef}
               className="search-input"
@@ -1000,8 +1007,9 @@ function MainApp() {
               className="header-btn"
               title="Refresh package data"
               onClick={() => { refreshPackages(); addToast('Refreshed package lists', 'info'); }}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              ↺
+              <RotateCcw size={15} strokeWidth={2} />
             </button>
           </div>
         </div>
@@ -1019,7 +1027,7 @@ function MainApp() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ color: lockStatus.isLockStale ? 'var(--warning)' : 'var(--danger)', fontWeight: 600 }}>
-                {lockStatus.isLockStale ? '⚠ Stale Database Lock' : '🔒 Package Manager Active'}
+                {lockStatus.isLockStale ? <><AlertTriangle size={13} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} />Stale Database Lock</> : <><Lock size={13} strokeWidth={2} style={{ verticalAlign: 'middle', marginRight: 4 }} />Package Manager Active</>}
               </span>
               <span style={{ color: 'var(--text-secondary)' }}>{lockStatus.message}</span>
             </div>
@@ -1098,7 +1106,7 @@ function MainApp() {
                 <SkeletonGrid count={6} />
               ) : results.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon">🔍</div>
+                  <div className="empty-icon"><SearchX size={26} strokeWidth={1.75} /></div>
                   <div className="empty-title">No packages found for "{query}"</div>
                   <div className="empty-desc">Try a shorter package name, the application's name, or a related keyword.</div>
                 </div>
