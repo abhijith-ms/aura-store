@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import '../server/index.js';
@@ -16,10 +16,15 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
   win.loadURL(`http://localhost:${PORT}${VIEW}`);
 }
+
+ipcMain.on('minimize-window', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize();
+});
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());

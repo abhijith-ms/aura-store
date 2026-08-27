@@ -149,7 +149,7 @@ html, body, #root {
   background: transparent;
 }
 
-.electron-titlebar-close {
+.electron-titlebar-btn {
   -webkit-app-region: no-drag;
   width: 24px;
   height: 24px;
@@ -162,6 +162,11 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.electron-titlebar-btn:hover {
+  background: var(--border);
+  color: var(--text-primary);
 }
 
 .electron-titlebar-close:hover {
