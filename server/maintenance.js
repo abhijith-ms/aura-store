@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   autoCleanBuildCache: false,
   autoOpenTerminal: false,
   confirmInstalls: true,
+  autoCheckUpdates: true,
 };
 
 /**

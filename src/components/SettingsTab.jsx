@@ -23,6 +23,7 @@ export default function SettingsTab({ addToast }) {
     autoCleanBuildCache: false,
     autoOpenTerminal: false,
     confirmInstalls: true,
+    autoCheckUpdates: true,
   });
   const [cleaningAur, setCleaningAur] = useState(false);
   const [cleaningPacman, setCleaningPacman] = useState(false);
@@ -406,6 +407,22 @@ export default function SettingsTab({ addToast }) {
               type="checkbox"
               checked={Boolean(settings.autoCleanBuildCache)}
               onChange={(e) => updateSetting('autoCleanBuildCache', e.target.checked)}
+              style={{ width: 18, height: 18, cursor: 'pointer' }}
+            />
+          </div>
+
+          {/* Auto-Check for Updates Toggle */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>Auto-Check for Updates</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Periodically check for AUR/official package updates while the app is open and show a desktop notification when new ones appear.
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={Boolean(settings.autoCheckUpdates)}
+              onChange={(e) => updateSetting('autoCheckUpdates', e.target.checked)}
               style={{ width: 18, height: 18, cursor: 'pointer' }}
             />
           </div>

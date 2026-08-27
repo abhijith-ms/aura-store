@@ -19,12 +19,13 @@ import {
   streamInstall, launchApp, cancelInstall, checkRecovery, unlockPacman,
   getActiveOperation, getServerOperationHistory, submitAuthResponse,
   getOperationHistory, addOperationHistory, isLaunchable, CATEGORIES, getAppDisplayName,
-  formatNumber, timeAgo, KNOWN_DISPLAY_NAMES
+  formatNumber, timeAgo, KNOWN_DISPLAY_NAMES, getAppSettings
 } from './services/aurApi';
 import { normalizeQuery } from './services/search/normalizeQuery';
 import { rankPackages } from './services/search/rankPackages';
 import { searchCache } from './services/search/searchCache';
 import { fetchSearchCandidates } from './services/search/fetchSearchCandidates';
+import { diffNewlyAvailableUpdates, formatUpdateNotificationBody } from './services/updateNotifier';
 
 // Top curated candidates for Explore discovery (dynamically sorted by popularity/votes)
 const DISCOVERY_POPULAR_CANDIDATES = [
@@ -576,14 +577,53 @@ function MainApp() {
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef(null);
 
+  // Tracks the last-known set of update package names so we only notify
+  // about ones that appeared *while the app was running* — not ones that
+  // were already there at launch (the sidebar badge already shows those).
+  // null until the first successful check establishes a baseline.
+  const updateNotifyBaselineRef = useRef(null);
+
+  const checkForUpdates = useCallback(async () => {
+    try {
+      const { updates: freshUpdates } = await getUpdates();
+
+      const newlyAvailable = diffNewlyAvailableUpdates(updateNotifyBaselineRef.current, freshUpdates);
+      if (newlyAvailable.length > 0 && typeof Notification !== 'undefined') {
+        if (Notification.permission === 'default') await Notification.requestPermission();
+        if (Notification.permission === 'granted') {
+          new Notification('Aura Store', {
+            body: formatUpdateNotificationBody(newlyAvailable),
+            icon: '/favicon.png',
+          });
+        }
+      }
+      updateNotifyBaselineRef.current = new Set((freshUpdates || []).map(u => u.name));
+      setUpdates(freshUpdates || []);
+    } catch {}
+  }, []);
+
   // Refresh package metadata
   const refreshPackages = useCallback(() => {
     getInstalled().then(({ aur, allInstalled }) => {
       setInstalled(new Set(allInstalled));
       setAurInstalled(aur || []);
     }).catch(() => {});
-    getUpdates().then(({ updates: u }) => setUpdates(u || [])).catch(() => {});
-  }, []);
+    checkForUpdates();
+  }, [checkForUpdates]);
+
+  // Periodic background update check, gated by the "Auto-Check for Updates"
+  // setting. Manual refreshes (refreshPackages, called after installs/removes
+  // and via the header Refresh button) always run regardless of this setting
+  // — it only controls the silent timer-driven check.
+  useEffect(() => {
+    const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+    const timer = setInterval(async () => {
+      const { autoCheckUpdates } = await getAppSettings().catch(() => ({ autoCheckUpdates: true }));
+      if (autoCheckUpdates === false) return;
+      checkForUpdates();
+    }, CHECK_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [checkForUpdates]);
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now();

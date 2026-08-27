@@ -74,6 +74,8 @@ assert(typeof initialSettings === 'object', 'getSettings returns object');
 assert(['auto', 'paru', 'yay'].includes(initialSettings.aurHelper), 'aurHelper setting is valid option');
 assert(typeof initialSettings.autoCleanBuildCache === 'boolean', 'autoCleanBuildCache is boolean');
 assert(typeof initialSettings.autoOpenTerminal === 'boolean', 'autoOpenTerminal is boolean');
+assert(typeof initialSettings.autoCheckUpdates === 'boolean', 'autoCheckUpdates is boolean');
+assert(initialSettings.autoCheckUpdates === true, 'autoCheckUpdates defaults to enabled');
 
 const saveRes = saveSettings({ autoCleanBuildCache: true });
 assert(saveRes.ok === true, 'saveSettings returns ok');
