@@ -54,16 +54,26 @@ assert(entry.actions.some((a) => a.id === 'updates'), 'Has "updates" desktop act
 assert(entry.actions.some((a) => a.id === 'explore'), 'Has "explore" desktop action');
 
 // ─────────────────────────────────────────────────────────────
-// 2. Vector SVG Icon Asset
+// 2. Raster Icon Assets (no vector source — PNG tiers instead)
 // ─────────────────────────────────────────────────────────────
-console.log('\n── 2. Vector Icon Assets ──');
+console.log('\n── 2. Raster Icon Assets ──');
 
-const iconPath = path.join(ROOT_DIR, 'assets/aura-store.svg');
-assert(fs.existsSync(iconPath), 'assets/aura-store.svg exists');
+function readPngDimensions(filePath) {
+  const buf = fs.readFileSync(filePath);
+  const isPng = buf.length > 24 && buf.slice(0, 8).toString('hex') === '89504e470d0a1a0a';
+  if (!isPng) return null;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
 
-const iconContent = fs.readFileSync(iconPath, 'utf8');
-assert(iconContent.includes('<svg') && iconContent.includes('</svg>'), 'Valid SVG markup');
-assert(iconContent.includes('viewBox="0 0 512 512"'), 'SVG has 512x512 canvas definition');
+for (const [file, size] of [['assets/aura-store.png', 512], ['assets/aura-store-256.png', 256], ['assets/aura-store-128.png', 128]]) {
+  const iconPath = path.join(ROOT_DIR, file);
+  assert(fs.existsSync(iconPath), `${file} exists`);
+  const dims = readPngDimensions(iconPath);
+  assert(dims && dims.width === size && dims.height === size, `${file} is ${size}x${size}`, dims ? `got ${dims.width}x${dims.height}` : 'not a valid PNG');
+}
+
+assert(fs.existsSync(path.join(ROOT_DIR, 'public/favicon.png')), 'public/favicon.png exists');
+assert(fs.existsSync(path.join(ROOT_DIR, 'public/aura-store.png')), 'public/aura-store.png exists (sidebar brand mark)');
 
 // ─────────────────────────────────────────────────────────────
 // 3. Desktop Launcher Script
@@ -113,6 +123,9 @@ assert(pkgbuildContent.includes('provides=(\'aura-store\')'), 'PKGBUILD provides
 assert(pkgbuildContent.includes('/usr/lib/aura-store'), 'PKGBUILD installs to /usr/lib/aura-store');
 assert(pkgbuildContent.includes('electron:'), 'PKGBUILD lists electron as an optional dependency');
 assert(pkgbuildContent.includes('aura-store/electron'), 'PKGBUILD installs the electron shell directory');
+assert(pkgbuildContent.includes('hicolor/512x512/apps'), 'PKGBUILD installs the 512x512 hicolor icon tier');
+assert(pkgbuildContent.includes('hicolor/256x256/apps'), 'PKGBUILD installs the 256x256 hicolor icon tier');
+assert(pkgbuildContent.includes('hicolor/128x128/apps'), 'PKGBUILD installs the 128x128 hicolor icon tier');
 
 // ─────────────────────────────────────────────────────────────
 // 5. Unified Server Static Serving

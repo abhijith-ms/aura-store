@@ -42,7 +42,7 @@ export default function Sidebar({ active, onNav, installedCount, updateCount }) 
   return (
     <nav className="sidebar">
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">◈</div>
+        <img src="/aura-store.png" alt="" className="sidebar-logo-icon" />
         <div className="sidebar-logo-text">Aura Store</div>
       </div>
 

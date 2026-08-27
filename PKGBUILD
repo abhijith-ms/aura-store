@@ -40,7 +40,9 @@ package() {
   install -d "${pkgdir}/usr/lib/aura-store/dist"
   install -d "${pkgdir}/usr/bin"
   install -d "${pkgdir}/usr/share/applications"
-  install -d "${pkgdir}/usr/share/icons/hicolor/scalable/apps"
+  install -d "${pkgdir}/usr/share/icons/hicolor/512x512/apps"
+  install -d "${pkgdir}/usr/share/icons/hicolor/256x256/apps"
+  install -d "${pkgdir}/usr/share/icons/hicolor/128x128/apps"
 
   # Copy server, electron shell, assets, and dist bundle
   cp -r server/* "${pkgdir}/usr/lib/aura-store/server/" 2>/dev/null || true
@@ -53,7 +55,10 @@ package() {
   # 2. Binary symlink in /usr/bin
   install -m755 bin/aura-store "${pkgdir}/usr/bin/aura-store"
 
-  # 3. Desktop Entry and Icon
+  # 3. Desktop Entry and Icon (raster only — no vector source, so hicolor gets
+  # PNG tiers at the common launcher/taskbar/dock sizes instead of scalable/apps)
   install -m644 aura-store.desktop "${pkgdir}/usr/share/applications/aura-store.desktop"
-  install -m644 assets/aura-store.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/aura-store.svg"
+  install -m644 assets/aura-store.png "${pkgdir}/usr/share/icons/hicolor/512x512/apps/aura-store.png"
+  install -m644 assets/aura-store-256.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/aura-store.png"
+  install -m644 assets/aura-store-128.png "${pkgdir}/usr/share/icons/hicolor/128x128/apps/aura-store.png"
 }
