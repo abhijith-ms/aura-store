@@ -12,10 +12,28 @@ export const searchPackages = async (q, by = 'name-desc') => {
   return data.results || [];
 };
 
+// Official Arch repos (core/extra/multilib, and any distro-added repos) via
+// pacman's local sync databases.
+export const searchOfficialPackages = async (q) => {
+  if (!q?.trim()) return [];
+  const res = await fetch(`${API}/api/search/official?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+  return data.results || [];
+};
+
+export const getOfficialPackageInfo = async (pkg) => {
+  const res = await fetch(`${API}/api/info/official?pkg=${encodeURIComponent(pkg)}`);
+  const data = await res.json();
+  return data.results?.[0] || null;
+};
+
 export const getPackageInfo = async (pkg) => {
   const res = await fetch(`${API}/api/info?pkg=${encodeURIComponent(pkg)}`);
   const data = await res.json();
-  return data.results?.[0] || null;
+  const aurResult = data.results?.[0];
+  if (aurResult) return aurResult;
+  // Not in AUR — try official repos (e.g. clicking a dependency like "glibc").
+  return getOfficialPackageInfo(pkg);
 };
 
 // Known marketing display names for major software

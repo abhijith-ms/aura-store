@@ -51,18 +51,26 @@ export function createPackageViewModel(pkg, context = {}) {
   }
 
   // 2. Source / Repository Concept
-  const source = {
-    type: 'aur',
-    label: 'AUR',
-    fullName: 'Arch User Repository',
-    description: 'Community-maintained build recipe for Arch Linux',
-  };
+  const isOfficial = pkg.Source === 'official';
+  const source = isOfficial
+    ? {
+        type: 'official',
+        label: pkg.Repository || 'Official',
+        fullName: 'Official Arch Repository',
+        description: 'Maintained and signed by Arch Linux (or your distro\'s) package maintainers',
+      }
+    : {
+        type: 'aur',
+        label: 'AUR',
+        fullName: 'Arch User Repository',
+        description: 'Community-maintained build recipe for Arch Linux',
+      };
 
   // 3. Upstream & Source Links
   const upstream = {
     homepage: pkg.URL || null,
     source: pkg.PackageBase ? `https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=${encodeURIComponent(pkg.PackageBase)}` : null,
-    aur: `https://aur.archlinux.org/packages/${encodeURIComponent(pkgName)}`,
+    aur: isOfficial ? null : `https://aur.archlinux.org/packages/${encodeURIComponent(pkgName)}`,
   };
 
   // 4. Dependencies categorized accurately by metadata fields
@@ -83,7 +91,7 @@ export function createPackageViewModel(pkg, context = {}) {
   const metadata = {
     version: pkg.Version || null,
     packageBase: pkg.PackageBase || pkgName,
-    maintainer: pkg.Maintainer || 'None (Orphaned)',
+    maintainer: pkg.Maintainer || (isOfficial ? null : 'None (Orphaned)'),
     license: pkg.License && pkg.License.length > 0 ? pkg.License.join(', ') : null,
     firstSubmitted: pkg.FirstSubmitted ? timeAgo(pkg.FirstSubmitted) : null,
     lastModified: pkg.LastModified ? timeAgo(pkg.LastModified) : null,

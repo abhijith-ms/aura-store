@@ -7,7 +7,7 @@
  *   - Combines and deduplicates candidate pool before ranking
  */
 
-import { searchPackages, getMultiplePackageInfo } from '../aurApi.js';
+import { searchPackages, searchOfficialPackages, getMultiplePackageInfo } from '../aurApi.js';
 import { normalizeQuery } from './normalizeQuery.js';
 import { resolveQueryIdentity } from './applicationIdentity.js';
 
@@ -38,18 +38,28 @@ export async function fetchSearchCandidates(rawQuery, sortBy = 'name-desc') {
     }
   }
 
-  // Fetch candidates in parallel
-  const fetches = [...queriesToRun].map(q => searchPackages(q, sortBy).catch(() => []));
-  const results = await Promise.all(fetches);
+  // Fetch AUR candidates (multiple query variants) and official-repo candidates
+  // (raw query only — pacman's substring search doesn't benefit from alias expansion)
+  // in parallel.
+  const aurFetches = [...queriesToRun].map(q => searchPackages(q, sortBy).catch(() => []));
+  const officialFetch = searchOfficialPackages(rawQuery.trim()).catch(() => []);
+  const [aurResults, officialResults] = await Promise.all([
+    Promise.all(aurFetches),
+    officialFetch,
+  ]);
 
-  // Combine and deduplicate by package Name
+  // Combine and deduplicate by package Name. Official repo results take
+  // precedence on a name collision — paru/pacman prefer sync repos over AUR too.
   const candidateMap = new Map();
-  for (const list of results) {
+  for (const list of aurResults) {
     for (const pkg of list) {
       if (pkg?.Name && !candidateMap.has(pkg.Name)) {
         candidateMap.set(pkg.Name, pkg);
       }
     }
+  }
+  for (const pkg of officialResults) {
+    if (pkg?.Name) candidateMap.set(pkg.Name, pkg);
   }
 
   // 3. Ensure canonical packages for resolved identity are in candidate pool

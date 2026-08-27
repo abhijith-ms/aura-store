@@ -63,6 +63,8 @@ export default function PackageDetail({
     });
   }, [pkg, installed, updates, aurInstalledList, isInstalling, opState]);
 
+  const isOfficial = vm?.source?.type === 'official';
+
   const brandColor = useMemo(() => {
     return pkg?.Name ? getPackageBrandColor(pkg.Name) : 'var(--accent)';
   }, [pkg]);
@@ -170,7 +172,7 @@ export default function PackageDetail({
 
             {/* Source & Classification Badges */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
-              <span className="chip chip-purple" title={vm.source.fullName}>
+              <span className={`chip ${isOfficial ? 'chip-green' : 'chip-purple'}`} title={vm.source.fullName}>
                 {vm.source.label}
               </span>
               {vm.classification.role !== 'general' && (
@@ -188,16 +190,25 @@ export default function PackageDetail({
         {/* Hero Actions & Community Stats */}
         <div className="detail-hero-actions">
           <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
-              <span style={{ color: 'var(--warning)', fontWeight: 600 }}>★</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.votesFormatted}</span>
-              <span>votes</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
-              <span>📈</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.popularity}</span>
-              <span>popularity</span>
-            </div>
+            {isOfficial ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
+                <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Signed by {vm.source.label}</span>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <span style={{ color: 'var(--warning)', fontWeight: 600 }}>★</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.votesFormatted}</span>
+                  <span>votes</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <span>📈</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{vm.stats.popularity}</span>
+                  <span>popularity</span>
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -554,7 +565,9 @@ export default function PackageDetail({
         </div>
       </div>
 
-      {/* Build Transparency & PKGBUILD Recipe */}
+      {/* Build Transparency & PKGBUILD Recipe (AUR-only — official repo packages
+          are pre-built signed binaries, not built locally from a fetchable recipe) */}
+      {!isOfficial && (
       <div className="detail-section">
         <div className="detail-section-title" style={{ cursor: 'pointer' }} onClick={togglePkgbuild}>
           <span>Build Transparency & PKGBUILD</span>
@@ -586,6 +599,7 @@ export default function PackageDetail({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

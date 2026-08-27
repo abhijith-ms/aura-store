@@ -3,6 +3,7 @@ import { formatNumber, getAppDisplayName } from '../services/aurApi';
 import AppIcon from './AppIcon';
 
 export default function AppCard({ pkg, installed, installedInfo, onSelect, onQuickInstall, onLaunch, index = 0, isTopMatch = false }) {
+  const isOfficial = pkg.Source === 'official';
   const isInstalled = installed.has(pkg.Name);
   const displayName = getAppDisplayName(pkg.Name);
   const isCustomName = displayName !== pkg.Name;
@@ -38,23 +39,34 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
             {isCustomName ? pkg.Name : `v${pkg.Version}`}
           </div>
         </div>
-        {pkg.OutOfDate && (
+        {isOfficial ? (
+          <span className="chip chip-green" style={{ fontSize: 10 }} title={`Official Arch repository: ${pkg.Repository}`}>{pkg.Repository}</span>
+        ) : pkg.OutOfDate && (
           <span className="chip chip-orange" style={{ fontSize: 10 }} title="Flagged out of date in AUR">⚠</span>
         )}
       </div>
 
-      <div className="card-desc">{pkg.Description || 'No description available in AUR.'}</div>
+      <div className="card-desc">{pkg.Description || 'No description available.'}</div>
 
       <div className="card-footer">
         <div className="card-stats">
-          <div className="stat" title="AUR Votes">
-            <span>★</span>
-            <span>{formatNumber(pkg.NumVotes)}</span>
-          </div>
-          <div className="stat" title="Popularity Score">
-            <span>📈</span>
-            <span>{pkg.Popularity ? pkg.Popularity.toFixed(1) : '0'}</span>
-          </div>
+          {isOfficial ? (
+            <div className="stat" title="Official Arch repository">
+              <span>✓</span>
+              <span>Official</span>
+            </div>
+          ) : (
+            <>
+              <div className="stat" title="AUR Votes">
+                <span>★</span>
+                <span>{formatNumber(pkg.NumVotes)}</span>
+              </div>
+              <div className="stat" title="Popularity Score">
+                <span>📈</span>
+                <span>{pkg.Popularity ? pkg.Popularity.toFixed(1) : '0'}</span>
+              </div>
+            </>
+          )}
         </div>
         {canLaunch ? (
           hasDropdown ? (

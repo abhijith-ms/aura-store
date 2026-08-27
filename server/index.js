@@ -15,6 +15,7 @@ import {
   getSettings,
   saveSettings,
 } from './maintenance.js';
+import { searchOfficialRepos, getOfficialPackageInfo } from './officialRepo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -530,6 +531,30 @@ app.get('/api/info', async (req, res) => {
     const resp = await fetch(url);
     const data = await resp.json();
     res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Official Arch repos (core/extra/multilib, and any distro-added repos)
+// via pacman's local sync databases, not a network API ---
+app.get('/api/search/official', async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 1) return res.json({ results: [] });
+  try {
+    const results = await searchOfficialRepos(q);
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/info/official', async (req, res) => {
+  const { pkg } = req.query;
+  if (!pkg) return res.status(400).json({ error: 'pkg required' });
+  try {
+    const info = await getOfficialPackageInfo(pkg);
+    res.json({ results: info ? [info] : [] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
