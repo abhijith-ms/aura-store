@@ -1,10 +1,6 @@
 const getApiBase = () => {
-  if (typeof window !== 'undefined' && window.location) {
-    if (window.location.port === '3001' || !window.location.port) {
-      return window.location.origin;
-    }
-  }
-  return 'http://localhost:3001';
+  if (import.meta.env?.DEV) return 'http://localhost:3001';
+  return typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001';
 };
 
 const API = getApiBase();
