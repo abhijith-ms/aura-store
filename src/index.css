@@ -129,6 +129,50 @@ html, body, #root {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+/* ── Electron Frameless Title Bar (hidden outside the Electron shell) ── */
+.electron-titlebar {
+  display: none;
+}
+
+.electron-frameless .electron-titlebar {
+  display: flex;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  z-index: 1000;
+  -webkit-app-region: drag;
+  background: transparent;
+}
+
+.electron-titlebar-close {
+  -webkit-app-region: no-drag;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.electron-titlebar-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.electron-frameless .app-shell {
+  padding-top: 32px;
+}
+
 /* ── Layout Shell ── */
 .app-shell {
   display: flex;
