@@ -166,14 +166,15 @@ Command Palette (Top 6)  /  Full Grid View (Best Matches + Other Results)
 
 ## 🧪 Automated Test & Verification Suite
 
-Aura maintains a comprehensive multi-tier test suite (**~308 passing assertions** — the adversarial and maintenance suites query live system/package state, so their exact counts can shift slightly run to run):
+Aura maintains a comprehensive multi-tier test suite (**~321 passing assertions** — the adversarial and maintenance suites query live system/package state, so their exact counts can shift slightly run to run):
 
 | Suite | File | Assertions | Purpose |
 |---|---|---|---|
 | **Packaging & Desktop Integration** | `tests/packaging.test.js` | **30 / 30 PASS** | `.desktop` parsing, SVG vector validity, launcher permissions, PKGBUILD correctness, and the Electron native shell (main process, window icon, IPC wiring) |
 | **Official Arch Repo Search** | `tests/official-repo.test.js` | **34 / 34 PASS** | `pacman -Ss`/`-Si` output parsing (fixtures) and live `/api/search/official`, `/api/info/official` endpoint checks |
 | **Flathub Search & Install** | `tests/flathub.test.js` | **22 / 22 PASS** | Install command-builder (pure, no flatpak/pkexec invoked), live install-scope detection, and live `/api/search/flathub`, `/api/info/flathub` endpoint checks |
-| **Storage & Maintenance** | `tests/maintenance.test.js` | **~22 / 22 PASS** | Cache size calculations, settings persistence, storage API schema, and orphan parsing |
+| **Storage & Maintenance** | `tests/maintenance.test.js` | **~24 / 24 PASS** | Cache size calculations, settings persistence (incl. `autoCheckUpdates`), storage API schema, and orphan parsing |
+| **Background Update Notifications** | `tests/update-notifier.test.js` | **11 / 11 PASS** | Newly-available-update diffing against a baseline, notification body formatting (singular/plural/truncation) |
 | **In-App Sudo Auth Bridge** | `tests/auth.test.js` | **7 / 7 PASS** | Askpass script integrity, backend response queuing, user cancellation & validation |
 | **Icon Theme Resolution** | `tests/icon.test.js` | **14 / 14 PASS** | XDG icon hierarchy, size prioritization, raster/scalable precedence, and MIME types |
 | **Desktop Entry Parsing** | `tests/desktop.test.js` | **23 / 23 PASS** | `.desktop` Name/Exec/Icon extraction, GUI/Terminal/NoDisplay detection, Desktop Actions, field-code stripping |
@@ -189,6 +190,7 @@ node tests/packaging.test.js
 node tests/official-repo.test.js
 node tests/flathub.test.js
 node tests/maintenance.test.js
+node tests/update-notifier.test.js
 node tests/auth.test.js
 node tests/icon.test.js
 node tests/desktop.test.js
@@ -243,6 +245,7 @@ makepkg -si
 * [x] **v3.6.1** — Icon Theme Resolution (`Icon=` field + XDG hicolor lookup & backend streaming API)
 * [x] **v3.7** — Settings & Storage Maintenance (Cache cleaner, orphan packages, user preferences & auto-cleanup)
 * [x] **v4.0** — Native App Packaging (Standalone binary, `.desktop` entry, icon distribution, PKGBUILD, native Electron shell with custom title bar, browser-mode fallback)
+* [x] **v4.0.1** — Background Update Checking (30-minute silent re-check + desktop notifications for newly-available updates, toggleable in Settings)
 * [ ] **v4.1** — Real Arch User Testing & Feedback Loop
 * [ ] **v4.2** — Public Release
 * [~] **v5.0** — Universal Multi-Source Ecosystem
