@@ -14,11 +14,13 @@
     </script>
     <div id="electron-titlebar" class="electron-titlebar">
       <button id="electron-minimize-btn" class="electron-titlebar-btn" aria-label="Minimize" type="button">&#8211;</button>
+      <button id="electron-maximize-btn" class="electron-titlebar-btn" aria-label="Maximize" type="button">&#9723;</button>
       <button id="electron-close-btn" class="electron-titlebar-btn electron-titlebar-close" aria-label="Close" type="button">✕</button>
     </div>
     <div id="root"></div>
     <script>
       document.getElementById('electron-minimize-btn').addEventListener('click', () => window.electronAPI?.minimize());
+      document.getElementById('electron-maximize-btn').addEventListener('click', () => window.electronAPI?.maximize());
       document.getElementById('electron-close-btn').addEventListener('click', () => window.close());
     </script>
     <script type="module" src="/src/main.jsx"></script>

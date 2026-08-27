@@ -26,5 +26,11 @@ ipcMain.on('minimize-window', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.minimize();
 });
 
+ipcMain.on('maximize-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  win.isMaximized() ? win.unmaximize() : win.maximize();
+});
+
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());
