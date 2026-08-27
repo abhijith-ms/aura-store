@@ -7,7 +7,7 @@
  *   - Combines and deduplicates candidate pool before ranking
  */
 
-import { searchPackages, searchOfficialPackages, getMultiplePackageInfo } from '../aurApi.js';
+import { searchPackages, searchOfficialPackages, searchFlathubPackages, getMultiplePackageInfo } from '../aurApi.js';
 import { normalizeQuery } from './normalizeQuery.js';
 import { resolveQueryIdentity } from './applicationIdentity.js';
 
@@ -38,18 +38,22 @@ export async function fetchSearchCandidates(rawQuery, sortBy = 'name-desc') {
     }
   }
 
-  // Fetch AUR candidates (multiple query variants) and official-repo candidates
-  // (raw query only — pacman's substring search doesn't benefit from alias expansion)
-  // in parallel.
+  // Fetch AUR candidates (multiple query variants), official-repo candidates,
+  // and Flathub candidates (raw query only — neither benefits from AUR alias
+  // expansion) in parallel.
   const aurFetches = [...queriesToRun].map(q => searchPackages(q, sortBy).catch(() => []));
   const officialFetch = searchOfficialPackages(rawQuery.trim()).catch(() => []);
-  const [aurResults, officialResults] = await Promise.all([
+  const flathubFetch = searchFlathubPackages(rawQuery.trim()).catch(() => []);
+  const [aurResults, officialResults, flathubResults] = await Promise.all([
     Promise.all(aurFetches),
     officialFetch,
+    flathubFetch,
   ]);
 
   // Combine and deduplicate by package Name. Official repo results take
   // precedence on a name collision — paru/pacman prefer sync repos over AUR too.
+  // Flathub uses Title Case app names (e.g. "Firefox"), so it never collides
+  // with AUR/official's lowercase package names — both surface as distinct cards.
   const candidateMap = new Map();
   for (const list of aurResults) {
     for (const pkg of list) {
@@ -60,6 +64,11 @@ export async function fetchSearchCandidates(rawQuery, sortBy = 'name-desc') {
   }
   for (const pkg of officialResults) {
     if (pkg?.Name) candidateMap.set(pkg.Name, pkg);
+  }
+  for (const pkg of flathubResults) {
+    if (pkg?.Name && !candidateMap.has(pkg.Name)) {
+      candidateMap.set(pkg.Name, pkg);
+    }
   }
 
   // 3. Ensure canonical packages for resolved identity are in candidate pool

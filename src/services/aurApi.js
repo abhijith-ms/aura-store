@@ -27,6 +27,20 @@ export const getOfficialPackageInfo = async (pkg) => {
   return data.results?.[0] || null;
 };
 
+// Flathub (sandboxed apps) via Flathub's public REST API.
+export const searchFlathubPackages = async (q) => {
+  if (!q?.trim()) return [];
+  const res = await fetch(`${API}/api/search/flathub?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+  return data.results || [];
+};
+
+export const getFlathubPackageInfo = async (appId) => {
+  const res = await fetch(`${API}/api/info/flathub?appId=${encodeURIComponent(appId)}`);
+  const data = await res.json();
+  return data.results?.[0] || null;
+};
+
 export const getPackageInfo = async (pkg) => {
   const res = await fetch(`${API}/api/info?pkg=${encodeURIComponent(pkg)}`);
   const data = await res.json();
@@ -370,8 +384,9 @@ export const streamInstall = (pkg, action, callbacks, onDoneLegacy) => {
   const onAuthRequired = isStructured ? callbacks.onAuthRequired : null;
   const onDone = isStructured ? callbacks.onDone : onDoneLegacy;
   const opIdParam = isStructured && callbacks.opId ? `&opId=${encodeURIComponent(callbacks.opId)}` : '';
+  const sourceParam = isStructured && callbacks.source ? `&source=${encodeURIComponent(callbacks.source)}` : '';
 
-  const url = `${API}/api/install?pkg=${encodeURIComponent(pkg)}&action=${action}${opIdParam}`;
+  const url = `${API}/api/install?pkg=${encodeURIComponent(pkg)}&action=${action}${opIdParam}${sourceParam}`;
   const es = new EventSource(url);
 
   es.onmessage = (e) => {

@@ -4,7 +4,9 @@ import AppIcon from './AppIcon';
 
 export default function AppCard({ pkg, installed, installedInfo, onSelect, onQuickInstall, onLaunch, index = 0, isTopMatch = false }) {
   const isOfficial = pkg.Source === 'official';
-  const isInstalled = installed.has(pkg.Name);
+  const isFlathub = pkg.Source === 'flathub';
+  // Flathub identifies apps by AppId (org.mozilla.firefox), not the display name.
+  const isInstalled = installed.has(isFlathub ? (pkg.AppId || pkg.Name) : pkg.Name);
   const displayName = getAppDisplayName(pkg.Name);
   const isCustomName = displayName !== pkg.Name;
   const [openDropdown, setOpenDropdown] = useState(false);
@@ -32,15 +34,17 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
       onClick={() => onSelect(pkg)}
     >
       <div className="card-top">
-        <AppIcon pkgName={pkg.Name} iconName={desktopEntries[0]?.icon || null} size="md" installed={isInstalled} />
+        <AppIcon pkgName={pkg.Name} iconName={desktopEntries[0]?.icon || null} iconUrl={isFlathub ? pkg.IconUrl : null} size="md" installed={isInstalled} />
         <div className="card-title-block">
           <div className="card-name">{displayName}</div>
           <div className="card-version">
-            {isCustomName ? pkg.Name : `v${pkg.Version}`}
+            {isFlathub ? pkg.AppId : isCustomName ? pkg.Name : `v${pkg.Version}`}
           </div>
         </div>
         {isOfficial ? (
           <span className="chip chip-green" style={{ fontSize: 10 }} title={`Official Arch repository: ${pkg.Repository}`}>{pkg.Repository}</span>
+        ) : isFlathub ? (
+          <span className="chip chip-indigo" style={{ fontSize: 10 }} title="Sandboxed app via Flathub">Flathub</span>
         ) : pkg.OutOfDate && (
           <span className="chip chip-orange" style={{ fontSize: 10 }} title="Flagged out of date in AUR">⚠</span>
         )}
@@ -54,6 +58,11 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
             <div className="stat" title="Official Arch repository">
               <span>✓</span>
               <span>Official</span>
+            </div>
+          ) : isFlathub ? (
+            <div className="stat" title="Sandboxed via Flatpak">
+              <span>📦</span>
+              <span>Sandboxed</span>
             </div>
           ) : (
             <>

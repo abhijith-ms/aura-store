@@ -756,7 +756,12 @@ function MainApp() {
   }, [query, sortBy, installed]);
 
   // Run single install / remove with authoritative operation model
-  const runPackageAction = useCallback((pkgName, action, onFinish) => {
+  const runPackageAction = useCallback((pkgOrName, action, onFinish) => {
+    const isFlathub = typeof pkgOrName === 'object' && pkgOrName?.Source === 'flathub';
+    const pkgName = typeof pkgOrName === 'object' ? pkgOrName.Name : pkgOrName;
+    // Flathub install/uninstall needs the reverse-DNS AppId, not the human display name.
+    const installId = isFlathub ? pkgOrName.AppId : pkgName;
+
     setActivePkg(pkgName);
     setActiveAction(action);
     setIsProcessing(true);
@@ -765,7 +770,8 @@ function MainApp() {
     setLastError(null);
     setTermLogs([]);
 
-    streamInstall(pkgName, action, {
+    streamInstall(installId, action, {
+      source: isFlathub ? 'flathub' : undefined,
       onLog: (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
       onAuthRequired: (data) => setAuthRequest(data),
       onStateChange: (event, opId) => {
@@ -852,7 +858,7 @@ function MainApp() {
   };
 
   const handleQuickInstall = (pkg) => {
-    runPackageAction(pkg.Name, 'install');
+    runPackageAction(pkg, 'install');
   };
 
   const handleLaunchApp = async (pkgName, displayName, desktopFile, actionId = null) => {

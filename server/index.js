@@ -16,6 +16,7 @@ import {
   saveSettings,
 } from './maintenance.js';
 import { searchOfficialRepos, getOfficialPackageInfo } from './officialRepo.js';
+import { searchFlathub, getFlathubAppInfo, getFlathubInstallScope, buildFlathubCommand } from './flathub.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -560,6 +561,29 @@ app.get('/api/info/official', async (req, res) => {
   }
 });
 
+// --- Flathub (sandboxed apps) via Flathub's public REST API ---
+app.get('/api/search/flathub', async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 1) return res.json({ results: [] });
+  try {
+    const results = await searchFlathub(q);
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/info/flathub', async (req, res) => {
+  const { appId } = req.query;
+  if (!appId) return res.status(400).json({ error: 'appId required' });
+  try {
+    const info = await getFlathubAppInfo(appId);
+    res.json({ results: info ? [info] : [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Installed packages with real system Desktop Entry verification ---
 app.get('/api/installed', async (req, res) => {
   try {
@@ -567,6 +591,7 @@ app.get('/api/installed', async (req, res) => {
 
     const { stdout: aurPkgs } = await execAsync('pacman -Qm 2>/dev/null').catch(() => ({ stdout: '' }));
     const { stdout: allPkgs } = await execAsync('pacman -Q 2>/dev/null').catch(() => ({ stdout: '' }));
+    const { stdout: flatpakApps } = await execFileAsync('flatpak', ['list', '--app', '--columns=application']).catch(() => ({ stdout: '' }));
 
     const aur = [];
     for (const l of aurPkgs.trim().split('\n').filter(Boolean)) {
@@ -594,6 +619,7 @@ app.get('/api/installed', async (req, res) => {
     }
 
     const allSet = new Set(allPkgs.trim().split('\n').filter(Boolean).map(l => l.split(' ')[0]));
+    for (const appId of flatpakApps.trim().split('\n').filter(Boolean)) allSet.add(appId);
     res.json({ aur, allInstalled: [...allSet] });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -616,7 +642,7 @@ app.get('/api/updates', async (req, res) => {
 
 // --- Live Install / Update / Remove via SSE (Authoritative Operation Stream) ---
 app.get('/api/install', async (req, res) => {
-  const { pkg, action = 'install', opId } = req.query;
+  const { pkg, action = 'install', opId, source } = req.query;
 
   // Reconnection path: Client reconnecting to existing operation
   if (opId && engine.activeOperation && engine.activeOperation.id === opId) {
@@ -681,12 +707,27 @@ app.get('/api/install', async (req, res) => {
   engine.setState(op.id, 'resolving');
 
   // Pre-check and auto-link manual download sources
-  if (action === 'install') {
+  if (action === 'install' && source !== 'flathub') {
     autoLinkDownloadSources(pkg);
   }
 
+  op.pkgSource = source === 'flathub' ? 'flathub' : 'aur';
+
   let cmd, args;
-  if (action === 'remove') {
+  if (source === 'flathub') {
+    const scope = await getFlathubInstallScope();
+    if (!scope) {
+      await engine.finishOperation(op.id, 'failed', {
+        code: 'FLATHUB_NOT_CONFIGURED',
+        message: 'Flathub is not set up on this system. Add it with "flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo".',
+        stage: 'resolving',
+        recoverable: false,
+        suggestedAction: 'show_logs',
+      });
+      return res.end();
+    }
+    ({ cmd, args } = buildFlathubCommand(action, scope, pkg));
+  } else if (action === 'remove') {
     cmd = 'pkexec';
     args = ['pacman', '-R', '--noconfirm', pkg];
   } else {

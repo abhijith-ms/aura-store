@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { getPkgbuild, openDownloadsFolder, unlockPacman } from '../services/aurApi';
+import { getPkgbuild, openDownloadsFolder, unlockPacman, formatNumber } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
 import { createPackageViewModel } from '../services/packageViewModel';
 import AppIcon from './AppIcon';
@@ -64,6 +64,9 @@ export default function PackageDetail({
   }, [pkg, installed, updates, aurInstalledList, isInstalling, opState]);
 
   const isOfficial = vm?.source?.type === 'official';
+  const isFlathub = vm?.source?.type === 'flathub';
+  // Flathub install/uninstall needs the reverse-DNS AppId, not the display name.
+  const installTarget = vm ? { Name: vm.name, Source: vm.raw?.Source, AppId: vm.raw?.AppId } : null;
 
   const brandColor = useMemo(() => {
     return pkg?.Name ? getPackageBrandColor(pkg.Name) : 'var(--accent)';
@@ -119,11 +122,11 @@ export default function PackageDetail({
 
   const handleConfirmedInstall = () => {
     setConfirmingInstall(false);
-    onInstallStart(vm.name, vm.state.updateAvailable ? 'update' : 'install');
+    onInstallStart(installTarget, vm.state.updateAvailable ? 'update' : 'install');
   };
 
   const handleRemove = () => {
-    onInstallStart(vm.name, 'remove');
+    onInstallStart(installTarget, 'remove');
   };
 
   const handleOpenDownloads = async () => {
@@ -136,7 +139,7 @@ export default function PackageDetail({
     const res = await unlockPacman();
     if (res.ok) {
       addToast('Lock removed. Retrying build…', 'success');
-      onInstallStart(vm.name, 'install');
+      onInstallStart(installTarget, 'install');
     } else {
       addToast('Failed to remove lock. Sudo permissions required.', 'error');
     }
@@ -160,6 +163,7 @@ export default function PackageDetail({
           <AppIcon
             pkgName={vm.name}
             iconName={vm.launch.desktopEntries[0]?.icon || null}
+            iconUrl={isFlathub ? vm.raw?.IconUrl : null}
             size="hero"
             installed={vm.state.installed}
           />
@@ -172,9 +176,12 @@ export default function PackageDetail({
 
             {/* Source & Classification Badges */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
-              <span className={`chip ${isOfficial ? 'chip-green' : 'chip-purple'}`} title={vm.source.fullName}>
+              <span className={`chip ${isOfficial ? 'chip-green' : isFlathub ? 'chip-indigo' : 'chip-purple'}`} title={vm.source.fullName}>
                 {vm.source.label}
               </span>
+              {isFlathub && vm.metadata.verified && (
+                <span className="chip chip-green" title="Verified by the app's developer on Flathub">✓ Verified</span>
+              )}
               {vm.classification.role !== 'general' && (
                 <span className="chip chip-gray" title={`Classification: ${vm.classification.label}`}>
                   {vm.classification.label}
@@ -195,6 +202,20 @@ export default function PackageDetail({
                 <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Signed by {vm.source.label}</span>
               </div>
+            ) : isFlathub ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <span>📦</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Sandboxed</span>
+                </div>
+                {vm.metadata.installsLastMonth > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <span>📈</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatNumber(vm.metadata.installsLastMonth)}</span>
+                    <span>installs/month</span>
+                  </div>
+                )}
+              </>
             ) : (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -345,7 +366,7 @@ export default function PackageDetail({
                 <button className="btn btn-ghost" onClick={handleOpenDownloads}>
                   Open Downloads Folder
                 </button>
-                <button className="btn btn-primary" onClick={() => onInstallStart(vm.name, 'install')}>
+                <button className="btn btn-primary" onClick={() => onInstallStart(installTarget, 'install')}>
                   Retry Build
                 </button>
               </div>
@@ -378,7 +399,7 @@ export default function PackageDetail({
                 <button className="btn btn-ghost" onClick={onToggleTerminal}>
                   Show Terminal Logs
                 </button>
-                <button className="btn btn-primary" onClick={() => onInstallStart(vm.name, 'install')}>
+                <button className="btn btn-primary" onClick={() => onInstallStart(installTarget, 'install')}>
                   Retry Build
                 </button>
               </div>
@@ -562,12 +583,21 @@ export default function PackageDetail({
               </a>
             </div>
           )}
+
+          {vm.upstream.flathub && (
+            <div className="info-row">
+              <span className="info-label">Flathub Page</span>
+              <a className="info-link" href={vm.upstream.flathub} target="_blank" rel="noreferrer">
+                flathub.org/apps/{vm.raw?.AppId} ↗
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Build Transparency & PKGBUILD Recipe (AUR-only — official repo packages
           are pre-built signed binaries, not built locally from a fetchable recipe) */}
-      {!isOfficial && (
+      {!isOfficial && !isFlathub && (
       <div className="detail-section">
         <div className="detail-section-title" style={{ cursor: 'pointer' }} onClick={togglePkgbuild}>
           <span>Build Transparency & PKGBUILD</span>

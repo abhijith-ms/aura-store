@@ -52,12 +52,20 @@ export function createPackageViewModel(pkg, context = {}) {
 
   // 2. Source / Repository Concept
   const isOfficial = pkg.Source === 'official';
+  const isFlathub = pkg.Source === 'flathub';
   const source = isOfficial
     ? {
         type: 'official',
         label: pkg.Repository || 'Official',
         fullName: 'Official Arch Repository',
         description: 'Maintained and signed by Arch Linux (or your distro\'s) package maintainers',
+      }
+    : isFlathub
+    ? {
+        type: 'flathub',
+        label: 'Flathub',
+        fullName: 'Flathub',
+        description: 'Sandboxed app distributed via Flatpak, isolated from the rest of the system',
       }
     : {
         type: 'aur',
@@ -66,11 +74,17 @@ export function createPackageViewModel(pkg, context = {}) {
         description: 'Community-maintained build recipe for Arch Linux',
       };
 
+  // Flathub identifies apps by their reverse-DNS AppId (e.g. org.mozilla.firefox),
+  // not the human display name — install/uninstall and installed-state checks
+  // must key off that instead of pkgName.
+  const identityKey = isFlathub ? (pkg.AppId || pkgName) : pkgName;
+
   // 3. Upstream & Source Links
   const upstream = {
     homepage: pkg.URL || null,
     source: pkg.PackageBase ? `https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=${encodeURIComponent(pkg.PackageBase)}` : null,
-    aur: isOfficial ? null : `https://aur.archlinux.org/packages/${encodeURIComponent(pkgName)}`,
+    aur: (isOfficial || isFlathub) ? null : `https://aur.archlinux.org/packages/${encodeURIComponent(pkgName)}`,
+    flathub: isFlathub ? `https://flathub.org/apps/${encodeURIComponent(pkg.AppId || pkgName)}` : null,
   };
 
   // 4. Dependencies categorized accurately by metadata fields
@@ -91,7 +105,9 @@ export function createPackageViewModel(pkg, context = {}) {
   const metadata = {
     version: pkg.Version || null,
     packageBase: pkg.PackageBase || pkgName,
-    maintainer: pkg.Maintainer || (isOfficial ? null : 'None (Orphaned)'),
+    maintainer: pkg.Maintainer || ((isOfficial || isFlathub) ? null : 'None (Orphaned)'),
+    verified: Boolean(pkg.Verified),
+    installsLastMonth: pkg.InstallsLastMonth || 0,
     license: pkg.License && pkg.License.length > 0 ? pkg.License.join(', ') : null,
     firstSubmitted: pkg.FirstSubmitted ? timeAgo(pkg.FirstSubmitted) : null,
     lastModified: pkg.LastModified ? timeAgo(pkg.LastModified) : null,
@@ -104,8 +120,8 @@ export function createPackageViewModel(pkg, context = {}) {
   const canLaunch = isLaunchable(pkgName) || desktopEntries.length > 0;
 
   // 7. State & Actions Context
-  const isInstalled = context.installedPackages ? context.installedPackages.has(pkgName) : false;
-  const isUpdate = context.updates ? (Array.isArray(context.updates) ? context.updates.some(u => (u.name || u.pkg || u) === pkgName) : context.updates.has(pkgName)) : false;
+  const isInstalled = context.installedPackages ? context.installedPackages.has(identityKey) : false;
+  const isUpdate = isFlathub ? false : (context.updates ? (Array.isArray(context.updates) ? context.updates.some(u => (u.name || u.pkg || u) === pkgName) : context.updates.has(pkgName)) : false);
   const activeOp = context.activeOperation && context.activeOperation.pkg === pkgName ? context.activeOperation : null;
 
   return {
