@@ -1,8 +1,8 @@
 # Aura Store ✦
 
-> **A modern, intelligent, Linux-native software center for Arch Linux and the Arch User Repository (AUR).**
+> **A modern, intelligent, Linux-native software center unifying the AUR, official Arch repos, Flathub, and Chaotic-AUR into one search.**
 
-Aura bridges the gap between raw package managers (`pacman`, `paru`, `yay`) and modern desktop app store UX. It replaces text-dump terminal helpers and generic web wrappers with an authoritative, process-backed runtime, deterministic application identity search, repository-aware package inspection, and deep native desktop integration.
+Aura bridges the gap between raw package managers (`pacman`, `paru`, `yay`, `flatpak`) and modern desktop app store UX. It replaces text-dump terminal helpers and generic web wrappers with an authoritative, process-backed runtime, deterministic application identity search across multiple distinctly-labeled sources, and deep native desktop integration — packaged as a real Electron app, not just a browser tab.
 
 ---
 
@@ -13,7 +13,7 @@ Aura bridges the gap between raw package managers (`pacman`, `paru`, `yay`) and 
 2. **Deterministic Intent Resolution (No Black-Box AI in the Critical Path):**
    * Search understands what application you mean (e.g. `chrome` $\rightarrow$ `google-chrome`, `vscode` $\rightarrow$ `visual-studio-code-bin`), prioritizing exact canonical identity over popularity while keeping natural categories broad.
 3. **Repository Awareness & Pure Package Normalization:**
-   * Clean separation between Application Display Identity, Package Name, and Source Repositories (`AUR`, extensible to official Arch repos).
+   * Clean separation between Application Display Identity, Package Name, and Source Repository — `AUR`, Official Arch Repos, Flathub, and Chaotic-AUR are all first-class, distinctly labeled sources merged into one ranked search.
 4. **Robust System Safety & Lifecycle Integrity:**
    * Process-tree signal group handling (`SIGTERM`/`SIGKILL`), mutual exclusion on system-mutating operations, safe stale lock detection, and seamless SSE reconnection across renderer crashes or browser refreshes.
 5. **Linux-Native Application Feel:**
@@ -50,7 +50,11 @@ v3.6.1 ── Icon Theme Resolution (Icon= field extraction, XDG hicolor lookup 
   ↓
 v3.7  ── Settings & Storage Maintenance (Cache cleaner, orphan packages, user preferences & auto-cleanup)
   ↓
-v4.0  ── Native App Packaging & Arch PKGBUILD (Single-process runtime, XDG .desktop, launcher & PKGBUILD) [CURRENT]
+v4.0  ── Native App Packaging & Arch PKGBUILD (Single-process runtime, native Electron shell, XDG .desktop, PKGBUILD)
+  ↓
+v4.0.1 ── Background Update Checking (Silent 30-minute re-check, desktop notifications for newly-available updates)
+  ↓
+v5.0  ── Universal Multi-Source Ecosystem (Official Arch Repos, Flathub, Chaotic-AUR merged into one ranked search) [CURRENT — AppImageHub & GitHub Releases still open]
 ```
 
 ---
@@ -59,23 +63,30 @@ v4.0  ── Native App Packaging & Arch PKGBUILD (Single-process runtime, XDG .
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
-│                          AURA FRONTEND (React)                         │
-│  • Command Palette (Ctrl+K)   • Explore / Curated Rails                │
-│  • Package Experience (v3.4)  • Category Browsers & Updates            │
-│  • Installed Library          • Structured Verification Badges         │
-│  • Real-time SSE Stream Logs  • Dependency Navigation Stack            │
-└───────────────────────────────────┬────────────────────────────────────┘
+│          NATIVE ELECTRON SHELL (frameless, custom title bar)           │
+│          — falls back to an installed browser's --app mode —           │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                     AURA FRONTEND (React)                        │  │
+│  │  • Command Palette (Ctrl+K)   • Explore / Curated Rails          │  │
+│  │  • Package Experience (v3.4)  • Category Browsers & Updates      │  │
+│  │  • Installed Library          • Multi-Source Badges (v5.0)       │  │
+│  │  • Real-time SSE Stream Logs  • Dependency Navigation Stack      │  │
+│  │  • lucide-react icon system   • Background update notifications  │  │
+│  └────────────────────────────────┬─────────────────────────────────┘  │
+└───────────────────────────────────┼────────────────────────────────────┘
                                     │ HTTP / EventSource (SSE)
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                    OPERATION ENGINE & SERVER (Node.js)                 │
 │  • Mutex Concurrency Guard        • Ring-buffered memory limits        │
 │  • Process Tree Killer (-pid)     • Persistent Activity History        │
 │  • Lock Safety (pgrep pacman)     • Native XDG Desktop Entry Scanner   │
+│  • AUR RPC v5 proxy               • Flathub v2 REST API client         │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ Spawns isolated process groups
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                      ARCH LINUX SYSTEM BACKEND                         │
-│  • pacman  • paru / yay  • makepkg  • pkexec  • gtk-launch / XDG       │
+│  • pacman (core/extra/multilib/Chaotic-AUR — any synced repo)          │
+│  • paru / yay  • makepkg  • pkexec  • flatpak  • gtk-launch / XDG      │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -93,7 +104,7 @@ Raw AUR Metadata + System State (pacman -Q, desktopEntriesMap, operations)
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        NORMALIZED VIEW MODEL                           │
 │  • identity:       Application Name vs Technical Package Name          │
-│  • source:         { type: 'aur', label: 'AUR', fullName: '...' }      │
+│  • source:         type: 'aur' | 'official' | 'flathub' | 'chaotic-aur'│
 │  • classification: 'Main package' | 'Variant' | 'Related package'      │
 │  • upstream:       { homepage, source (PKGBUILD), aur }                │
 │  • dependencies:   runtime (Depends), make, optional, check (accurate) │
@@ -210,6 +221,7 @@ npm run build
 * Arch Linux / Arch-based distribution
 * Node.js (v18+) & `npm`
 * `pacman` and an AUR helper (`paru` or `yay`)
+* Optional: `electron` (native window — falls back to an installed browser's `--app` mode without it) and `flatpak` (Flathub search still works without it, but install/uninstall needs it)
 
 ### 1. One-Click Desktop Application Mode
 ```bash
