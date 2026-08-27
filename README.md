@@ -166,7 +166,7 @@ Command Palette (Top 6)  /  Full Grid View (Best Matches + Other Results)
 
 ## 🧪 Automated Test & Verification Suite
 
-Aura maintains a comprehensive multi-tier test suite (**~314 passing assertions** — the adversarial and maintenance suites query live system/package state, so their exact counts can shift slightly run to run):
+Aura maintains a comprehensive multi-tier test suite (**~308 passing assertions** — the adversarial and maintenance suites query live system/package state, so their exact counts can shift slightly run to run):
 
 | Suite | File | Assertions | Purpose |
 |---|---|---|---|
@@ -177,7 +177,7 @@ Aura maintains a comprehensive multi-tier test suite (**~314 passing assertions*
 | **In-App Sudo Auth Bridge** | `tests/auth.test.js` | **7 / 7 PASS** | Askpass script integrity, backend response queuing, user cancellation & validation |
 | **Icon Theme Resolution** | `tests/icon.test.js` | **14 / 14 PASS** | XDG icon hierarchy, size prioritization, raster/scalable precedence, and MIME types |
 | **Desktop Entry Parsing** | `tests/desktop.test.js` | **23 / 23 PASS** | `.desktop` Name/Exec/Icon extraction, GUI/Terminal/NoDisplay detection, Desktop Actions, field-code stripping |
-| **Package View Model & Experience** | `tests/package.test.js` | **28 / 28 PASS** | Source awareness, pure transformations, dependency parsing, and state resolution |
+| **Package View Model & Experience** | `tests/package.test.js` | **38 / 38 PASS** | Source awareness (AUR/Official/Flathub/Chaotic-AUR), pure transformations, dependency parsing, and state resolution |
 | **Search Core Unit** | `tests/search.test.js` | **27 / 27 PASS** | Normalization, primary/secondary sorting, LRU cache eviction and TTL |
 | **Identity & Intent Unit** | `tests/search.identity.test.js` | **22 / 22 PASS** | Alias resolution, variant queries, extension demotion, and ambiguity protection |
 | **Live Search Benchmark** | `tests/search.benchmark.js` | **18 / 18 PASS (100%)** | Real queries against live AUR candidates (`chrome`, `vscode`, `firefox`, `discord`, `code`, `music player`) |
@@ -249,5 +249,5 @@ makepkg -si
   * [x] Official Arch Repositories (core/extra/multilib & distro-added repos via `pacman -Ss`/`-Si`, merged into search ranking, source badges in UI)
   * [x] Flathub (search/browse/install/uninstall via Flathub's v2 API + `flatpak`, scope-aware install, verified badges, sandboxed apps distinct from AUR/official)
   * [ ] AppImageHub
-  * [ ] Chaotic-AUR (as a distinct labeled source — already searchable today as just another synced repo)
+  * [x] Chaotic-AUR (distinct orange "Chaotic-AUR" badge + accurate "community-built, not Arch-signed" copy, instead of blending into the generic Official badge)
   * [ ] GitHub Releases
