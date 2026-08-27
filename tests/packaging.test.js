@@ -79,7 +79,24 @@ assert(isExecutable, 'bin/aura-store has executable permissions (+x)');
 
 const launcherContent = fs.readFileSync(launcherPath, 'utf8');
 assert(launcherContent.includes('PORT=3001'), 'Launcher targets unified port 3001');
-assert(launcherContent.includes('--class="aura-store"'), 'Launcher sets window class to aura-store');
+assert(launcherContent.includes('--class="aura-store"'), 'Launcher sets window class to aura-store (browser fallback)');
+assert(launcherContent.includes('electron/main.js'), 'Launcher prefers native Electron shell');
+assert(launcherContent.includes('--class=aura-store'), 'Launcher sets window class to aura-store (electron)');
+
+// ─────────────────────────────────────────────────────────────
+// 3b. Electron Native Shell
+// ─────────────────────────────────────────────────────────────
+console.log('\n── 3b. Electron Native Shell ──');
+
+const electronMainPath = path.join(ROOT_DIR, 'electron/main.js');
+assert(fs.existsSync(electronMainPath), 'electron/main.js exists');
+
+const electronMainContent = fs.readFileSync(electronMainPath, 'utf8');
+assert(electronMainContent.includes("import '../server/index.js'"), 'Electron main embeds the unified server');
+assert(electronMainContent.includes('BrowserWindow'), 'Electron main creates a BrowserWindow');
+
+const iconPngPath = path.join(ROOT_DIR, 'assets/aura-store.png');
+assert(fs.existsSync(iconPngPath), 'assets/aura-store.png exists for the Electron window icon');
 
 // ─────────────────────────────────────────────────────────────
 // 4. Arch Linux PKGBUILD Verification
@@ -94,6 +111,8 @@ assert(pkgbuildContent.includes('pkgname=aura-store-git'), 'PKGBUILD declares pk
 assert(pkgbuildContent.includes('depends='), 'PKGBUILD specifies depends');
 assert(pkgbuildContent.includes('provides=(\'aura-store\')'), 'PKGBUILD provides aura-store');
 assert(pkgbuildContent.includes('/usr/lib/aura-store'), 'PKGBUILD installs to /usr/lib/aura-store');
+assert(pkgbuildContent.includes('electron:'), 'PKGBUILD lists electron as an optional dependency');
+assert(pkgbuildContent.includes('aura-store/electron'), 'PKGBUILD installs the electron shell directory');
 
 // ─────────────────────────────────────────────────────────────
 // 5. Unified Server Static Serving

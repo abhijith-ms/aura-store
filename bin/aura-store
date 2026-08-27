@@ -13,13 +13,7 @@ if [ ! -d "${DIR}/dist" ]; then
   (cd "${DIR}" && npm run build >/dev/null 2>&1)
 fi
 
-# 2. Start unified server in background if not already listening
-if ! ss -tulpn 2>/dev/null | grep -q ":${PORT}"; then
-  (cd "${DIR}" && node server/index.js >/dev/null 2>&1) &
-  sleep 0.8
-fi
-
-# 3. Handle optional action view flags
+# 2. Handle optional action view flags
 VIEW_PARAM=""
 if [[ "$*" == *"--view=updates"* ]]; then
   VIEW_PARAM="?view=updates"
@@ -27,9 +21,24 @@ elif [[ "$*" == *"--view=explore"* ]]; then
   VIEW_PARAM="?view=explore"
 fi
 
+# 3. Prefer a real native window via system Electron (Arch ships
+# versioned electronNN packages; the plain "electron" binary only
+# exists if the meta-package is installed).
+ELECTRON_BIN="$(command -v electron || compgen -c electron 2>/dev/null | grep -E '^electron[0-9]+$' | sort -rV | head -1)"
+if [ -n "${ELECTRON_BIN}" ]; then
+  exec env AURA_VIEW="${VIEW_PARAM}" "${ELECTRON_BIN}" "${DIR}/electron/main.js" --class=aura-store
+fi
+
+# 4. Fallback: start unified server in background if not already listening,
+# then open it in an installed browser's isolated --app window.
+if ! ss -tulpn 2>/dev/null | grep -q ":${PORT}"; then
+  (cd "${DIR}" && node server/index.js >/dev/null 2>&1) &
+  sleep 0.8
+fi
+
 TARGET_URL="${HOST}${VIEW_PARAM}"
 
-# 4. Launch dedicated isolated frameless desktop window
+# 5. Launch dedicated isolated frameless desktop window
 if command -v brave >/dev/null 2>&1; then
   exec brave --app="${TARGET_URL}" --user-data-dir="${USER_DATA_DIR}" --class="aura-store" --name="Aura Store" "$@"
 elif command -v google-chrome-stable >/dev/null 2>&1; then
