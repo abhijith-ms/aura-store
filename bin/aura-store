@@ -2,7 +2,24 @@
 # Standalone Desktop Launcher for Aura Store
 set -e
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve the real script location (BASH_SOURCE isn't symlink-aware, and
+# this script is commonly invoked via a ~/.local/bin/aura-store symlink).
+REAL_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO_DIR="$(cd "$(dirname "${REAL_SCRIPT}")/.." && pwd)"
+
+# A repo checkout keeps dist/server/electron as siblings of bin/'s parent.
+# A PKGBUILD install copies this script to /usr/bin, separate from the app
+# data in /usr/lib/aura-store, so fall back to that layout when neither
+# dist/ nor server/ exist next to the script.
+if [ -d "${REPO_DIR}/dist" ] || [ -f "${REPO_DIR}/server/index.js" ]; then
+  DIR="${REPO_DIR}"
+elif [ -d "/usr/lib/aura-store" ]; then
+  DIR="/usr/lib/aura-store"
+else
+  echo "Error: could not locate the Aura Store application directory" >&2
+  exit 1
+fi
+
 PORT=3001
 HOST="http://localhost:${PORT}"
 USER_DATA_DIR="${HOME}/.config/aura/app-profile"
