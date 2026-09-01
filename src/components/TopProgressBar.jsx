@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
 import { ArrowDown, X, ChevronUp, ChevronDown } from 'lucide-react';
 import AppIcon from './AppIcon';
+import { formatBytes } from '../services/aurApi';
 
 export default function TopProgressBar({
   active,
   pkgName,
   batchIndex = 0,
   batchTotal = 0,
+  batchTotalSize = 0,
   action = 'install',
   opState = 'resolving',
   metrics = {},
@@ -52,7 +54,7 @@ export default function TopProgressBar({
               {action === 'remove' ? 'Removing' : 'Updating'}: <span className="top-progress-name">{pkgName}</span>
               {isBatch && (
                 <span className="top-progress-batch-tag">
-                  ({batchIndex + 1} of {batchTotal})
+                  ({batchIndex + 1} of {batchTotal}{batchTotalSize > 0 && ` · ${formatBytes(batchTotalSize)} total`})
                 </span>
               )}
             </div>

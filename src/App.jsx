@@ -561,6 +561,7 @@ function MainApp() {
   const [batchActive, setBatchActive] = useState(false);
   const [batchIndex, setBatchIndex] = useState(0);
   const [batchList, setBatchList] = useState([]);
+  const [batchTotalSize, setBatchTotalSize] = useState(0);
   const [pkgStatusMap, setPkgStatusMap] = useState({});
 
   // Recent Searches State
@@ -908,6 +909,10 @@ function MainApp() {
     pkgList.forEach(n => { initialMap[n] = 'waiting'; });
     setPkgStatusMap(initialMap);
     setBatchList(pkgList);
+    setBatchTotalSize(pkgList.reduce((sum, name) => {
+      const u = updates.find(x => x.name === name);
+      return sum + (typeof u?.downloadSize === 'number' ? u.downloadSize : 0);
+    }, 0));
     setBatchIndex(0);
     setBatchActive(true);
     addToast(`Starting batch update for ${pkgList.length} packages…`, 'info');
@@ -1108,6 +1113,7 @@ function MainApp() {
           pkgName={activePkg}
           batchIndex={batchIndex}
           batchTotal={batchActive ? batchList.length : 0}
+          batchTotalSize={batchActive ? batchTotalSize : 0}
           action={activeAction}
           opState={opState}
           metrics={metrics}
