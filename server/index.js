@@ -790,7 +790,15 @@ app.get('/api/install', async (req, res) => {
     // or fails. Aura already shows the PKGBUILD in-app before install
     // (Build Transparency section), so paru's own review step is redundant
     // here anyway.
-    args = ['-S', '--noconfirm', '--skipreview', '--noprogressbar', '--color', 'never', '--sudoflags', '-A', pkg];
+    // -y/--refresh: the Updates tab is built from `checkupdates`, which syncs
+    // its own temp copy of the sync db — it never touches the real one used
+    // here. Without a refresh, this install resolves against whatever stale
+    // local sync db pacman last had, which can point at a package build long
+    // since pruned from every mirror (404 on every mirror, "up to date --
+    // reinstalling" for a version that's actually behind). Refreshing here
+    // keeps every individual install correct even if the system hasn't run
+    // a full sync recently.
+    args = ['-S', '-y', '--noconfirm', '--skipreview', '--noprogressbar', '--color', 'never', '--sudoflags', '-A', pkg];
   }
 
   // Spawn process with its own process group (detached: true) to enable clean subtree kill
