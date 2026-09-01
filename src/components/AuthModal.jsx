@@ -92,8 +92,11 @@ export default function AuthModal({ authRequest, onRespond }) {
           </div>
         </div>
 
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 18px 0' }}>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 6px 0' }}>
           {authRequest.prompt || 'Aura needs permission to install packages and modify system files.'}
+        </p>
+        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4, margin: '0 0 18px 0' }}>
+          Reused for the rest of this batch for 15 minutes — you won't be asked again per package.
         </p>
 
         <form onSubmit={handleSubmit}>

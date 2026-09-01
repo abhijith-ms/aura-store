@@ -866,6 +866,7 @@ app.get('/api/install', async (req, res) => {
         suggestedAction: 'show_logs',
       };
     } else if (text.includes('password incorrect') || text.includes('authentication failed')) {
+      cachedSudoPassword = null;
       detectedError = {
         code: 'AUTH_FAILED',
         message: 'Root authentication was cancelled or failed.',
@@ -1015,8 +1016,24 @@ app.get('/api/icon', (req, res) => {
 // --- In-App Sudo Askpass Bridge Endpoints ---
 const pendingAuthRequests = new Map();
 
+// Each batch update spawns a separate `paru -S` process per package (detached,
+// with its own session for clean tree-kill on Cancel), so sudo's own tty/session
+// timestamp cache never carries over between them — every package would re-prompt
+// for the password otherwise. Cache the validated password here instead, in
+// memory only, for a short window matching sudo's own default timestamp_timeout,
+// so a batch of hundreds of updates only asks once.
+const SUDO_CACHE_TTL_MS = 15 * 60 * 1000;
+let cachedSudoPassword = null;
+let cachedSudoPasswordAt = 0;
+
 app.post('/api/auth/askpass', (req, res) => {
   const { prompt } = req.body || {};
+
+  if (cachedSudoPassword && Date.now() - cachedSudoPasswordAt < SUDO_CACHE_TTL_MS) {
+    res.json({ password: cachedSudoPassword });
+    return;
+  }
+
   const authId = 'auth_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
   const opId = engine.activeOperation?.id || null;
 
@@ -1065,6 +1082,9 @@ app.post('/api/auth/respond', (req, res) => {
     } catch {}
     return res.status(400).json({ error: 'Password required' });
   }
+
+  cachedSudoPassword = password;
+  cachedSudoPasswordAt = Date.now();
 
   try {
     authReq.res.json({ password });
