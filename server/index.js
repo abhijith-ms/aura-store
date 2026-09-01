@@ -634,6 +634,36 @@ function parseUpdateLines(stdout, source) {
   });
 }
 
+function parseSizeToBytes(str) {
+  const m = str.trim().match(/^([\d.]+)\s*(B|KiB|MiB|GiB|TiB)$/i);
+  if (!m) return null;
+  const mult = { B: 1, KIB: 1024, MIB: 1024 ** 2, GIB: 1024 ** 3, TIB: 1024 ** 4 }[m[2].toUpperCase()];
+  return Math.round(parseFloat(m[1]) * mult);
+}
+
+// Download/installed sizes only exist for official-repo packages (pacman -Si).
+// AUR packages are built from source — there's no fixed download size to report.
+async function getOfficialSizes(names) {
+  if (names.length === 0) return {};
+  const { stdout } = await execFileAsync('pacman', ['-Si', ...names]).catch(() => ({ stdout: '' }));
+  const sizes = {};
+  for (const block of stdout.split(/\n\n+/)) {
+    const nameMatch = block.match(/^Name\s*:\s*(.+)$/m);
+    if (!nameMatch) continue;
+    const name = nameMatch[1].trim();
+    // A package can exist in multiple repos (e.g. cachyos + extra); pacman -Si
+    // lists them in repo-priority order, so keep only the first (winning) match.
+    if (sizes[name]) continue;
+    const dl = block.match(/^Download Size\s*:\s*(.+)$/m);
+    const inst = block.match(/^Installed Size\s*:\s*(.+)$/m);
+    sizes[name] = {
+      downloadSize: dl ? parseSizeToBytes(dl[1]) : null,
+      installSize: inst ? parseSizeToBytes(inst[1]) : null,
+    };
+  }
+  return sizes;
+}
+
 app.get('/api/updates', async (req, res) => {
   try {
     // AUR updates: paru -Qua hits the AUR RPC live, no sync-db freshness needed.
@@ -644,11 +674,17 @@ app.get('/api/updates', async (req, res) => {
       execAsync('paru -Qua 2>/dev/null').catch(() => ({ stdout: '' })),
       execAsync('checkupdates 2>/dev/null').catch(() => ({ stdout: '' })),
     ]);
-    const updates = [
-      ...parseUpdateLines(aurRes.stdout, 'aur'),
-      ...parseUpdateLines(officialRes.stdout, 'official'),
-    ];
-    res.json({ updates });
+    const aurUpdates = parseUpdateLines(aurRes.stdout, 'aur');
+    const officialUpdates = parseUpdateLines(officialRes.stdout, 'official');
+
+    const sizes = await getOfficialSizes(officialUpdates.map(u => u.name));
+    officialUpdates.forEach(u => {
+      const s = sizes[u.name];
+      u.downloadSize = s?.downloadSize ?? null;
+      u.installSize = s?.installSize ?? null;
+    });
+
+    res.json({ updates: [...aurUpdates, ...officialUpdates] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

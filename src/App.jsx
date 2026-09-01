@@ -19,7 +19,7 @@ import {
   streamInstall, launchApp, cancelInstall, checkRecovery, unlockPacman,
   getActiveOperation, getServerOperationHistory, submitAuthResponse,
   getOperationHistory, addOperationHistory, isLaunchable, CATEGORIES, getAppDisplayName,
-  formatNumber, timeAgo, KNOWN_DISPLAY_NAMES, getAppSettings
+  formatNumber, timeAgo, KNOWN_DISPLAY_NAMES, getAppSettings, formatBytes
 } from './services/aurApi';
 import { normalizeQuery } from './services/search/normalizeQuery';
 import { rankPackages } from './services/search/rankPackages';
@@ -388,13 +388,19 @@ function UpdatesTab({
   }
 
   const selectedCount = selected.size;
+  const selectedDownloadBytes = updates.reduce(
+    (sum, u) => sum + (selected.has(u.name) && typeof u.downloadSize === 'number' ? u.downloadSize : 0), 0
+  );
 
   return (
     <div>
       <div className="section-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
         <div>
           <div className="section-title">Available Updates</div>
-          <div className="section-count">{updates.length} updates available</div>
+          <div className="section-count">
+            {updates.length} updates available
+            {selectedDownloadBytes > 0 && ` · ${formatBytes(selectedDownloadBytes)} to download`}
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -455,6 +461,16 @@ function UpdatesTab({
                   {u.name}: <span style={{ color: 'var(--text-muted)' }}>{u.current}</span> <ArrowRight size={11} strokeWidth={2} style={{ verticalAlign: 'middle' }} /> <span style={{ color: 'var(--success)', fontWeight: 600 }}>{u.latest}</span>
                 </div>
               </div>
+
+              {/* Download / Install Size — only known for official-repo updates */}
+              {typeof u.downloadSize === 'number' ? (
+                <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+                  <div>{formatBytes(u.downloadSize)}</div>
+                  <div style={{ opacity: 0.7 }}>{formatBytes(u.installSize)} installed</div>
+                </div>
+              ) : u.source === 'aur' ? (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>Built from source</div>
+              ) : null}
 
               {/* Status Indicator */}
               {status === 'updating' ? (

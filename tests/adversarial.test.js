@@ -64,6 +64,13 @@ async function testEndpointHealth() {
   assert(Array.isArray(d6.updates), 'Updates returns updates array');
   assert(d6.updates.every(u => u.source === 'aur' || u.source === 'official'),
     'Every update is tagged with its source (aur/official), covering both paru -Qua and checkupdates');
+  const officialUpdates = d6.updates.filter(u => u.source === 'official');
+  if (officialUpdates.length > 0) {
+    assert(officialUpdates.every(u => typeof u.downloadSize === 'number' || u.downloadSize === null),
+      'Official updates carry a downloadSize (bytes) or null, never a raw string');
+    assert(officialUpdates.some(u => typeof u.downloadSize === 'number' && u.downloadSize > 0),
+      'At least one official update has a resolved download size from pacman -Si');
+  }
 }
 
 // ============================================================================
