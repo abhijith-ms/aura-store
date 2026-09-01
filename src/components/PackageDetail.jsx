@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft, Package, Check, AlertTriangle, TrendingUp, Star, X,
   ChevronDown, ChevronUp, Trash2, Circle, CircleDot, Download, Lock,
-  ExternalLink, Copy, Box,
+  ExternalLink, Copy, Box, FolderX,
 } from 'lucide-react';
-import { getPkgbuild, openDownloadsFolder, unlockPacman, formatNumber } from '../services/aurApi';
+import { getPkgbuild, openDownloadsFolder, unlockPacman, cleanCache, formatNumber } from '../services/aurApi';
 import { getPackageBrandColor } from '../services/iconRegistry';
 import { createPackageViewModel } from '../services/packageViewModel';
 import AppIcon from './AppIcon';
@@ -148,6 +148,17 @@ export default function PackageDetail({
       onInstallStart(installTarget, 'install');
     } else {
       addToast('Failed to remove lock. Sudo permissions required.', 'error');
+    }
+  };
+
+  const handleCleanBuildCacheAndRetry = async () => {
+    addToast('Clearing leftover build folder…', 'info');
+    const res = await cleanCache('aur', installTarget?.Name);
+    if (res.ok) {
+      addToast('Build folder cleared. Retrying…', 'success');
+      onInstallStart(installTarget, 'install');
+    } else {
+      addToast('Failed to clear build folder.', 'error');
     }
   };
 
@@ -395,6 +406,21 @@ export default function PackageDetail({
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
                 <button className="btn btn-primary" onClick={handleUnlockAndRetry}>
                   Clean Lock & Retry
+                </button>
+              </div>
+            </div>
+          ) : lastError.code === 'STALE_BUILD_CACHE' ? (
+            <div>
+              <div className="detail-section-title">
+                <span style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><FolderX size={15} strokeWidth={2} /> Leftover Build Folder</span>
+                <span className="chip chip-orange">Stale Cache</span>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                A build folder from a previous interrupted install is still on disk and is blocking a fresh clone. Clearing it is safe and will retry the build.
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="btn btn-primary" onClick={handleCleanBuildCacheAndRetry}>
+                  Clean Build Cache & Retry
                 </button>
               </div>
             </div>

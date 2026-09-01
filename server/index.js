@@ -627,13 +627,27 @@ app.get('/api/installed', async (req, res) => {
 });
 
 // --- Updates available ---
+function parseUpdateLines(stdout, source) {
+  return stdout.trim().split('\n').filter(Boolean).map(line => {
+    const parts = line.trim().split(/\s+/);
+    return { name: parts[0], current: parts[1], latest: parts[3], source };
+  });
+}
+
 app.get('/api/updates', async (req, res) => {
   try {
-    const { stdout } = await execAsync('paru -Qua 2>/dev/null').catch(() => ({ stdout: '' }));
-    const updates = stdout.trim().split('\n').filter(Boolean).map(line => {
-      const parts = line.trim().split(/\s+/);
-      return { name: parts[0], current: parts[1], latest: parts[3] };
-    });
+    // AUR updates: paru -Qua hits the AUR RPC live, no sync-db freshness needed.
+    // Official-repo updates: checkupdates (pacman-contrib) syncs its own temp copy
+    // of the sync db without sudo, unlike `paru -Qu`/`pacman -Qu` which only compare
+    // against the last-synced local cache and silently miss updates if it's stale.
+    const [aurRes, officialRes] = await Promise.all([
+      execAsync('paru -Qua 2>/dev/null').catch(() => ({ stdout: '' })),
+      execAsync('checkupdates 2>/dev/null').catch(() => ({ stdout: '' })),
+    ]);
+    const updates = [
+      ...parseUpdateLines(aurRes.stdout, 'aur'),
+      ...parseUpdateLines(officialRes.stdout, 'official'),
+    ];
     res.json({ updates });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -732,7 +746,15 @@ app.get('/api/install', async (req, res) => {
     args = ['pacman', '-R', '--noconfirm', pkg];
   } else {
     cmd = 'paru';
-    args = ['-S', '--noconfirm', '--noprogressbar', '--color', 'never', '--sudoflags', '-A', pkg];
+    // --skipreview: paru shows an interactive PKGBUILD review/diff prompt
+    // whenever a recipe changed since it was last built — which is every
+    // update, not just fresh installs. --noconfirm alone doesn't suppress
+    // it (it's a separate prompt from the install confirmation), so a
+    // non-interactive spawn (no TTY) just hangs on stdin until it times out
+    // or fails. Aura already shows the PKGBUILD in-app before install
+    // (Build Transparency section), so paru's own review step is redundant
+    // here anyway.
+    args = ['-S', '--noconfirm', '--skipreview', '--noprogressbar', '--color', 'never', '--sudoflags', '-A', pkg];
   }
 
   // Spawn process with its own process group (detached: true) to enable clean subtree kill
@@ -826,6 +848,15 @@ app.get('/api/install', async (req, res) => {
           suggestedAction: 'show_logs',
         };
       }
+    } else if (text.includes('already exists and is not an empty directory')) {
+      detectedError = {
+        code: 'STALE_BUILD_CACHE',
+        message: 'A leftover build folder from a previous interrupted install is blocking this package.',
+        details: text.trim(),
+        stage: 'downloading',
+        recoverable: true,
+        suggestedAction: 'clean_build_cache',
+      };
     }
   };
 

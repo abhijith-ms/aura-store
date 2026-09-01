@@ -62,6 +62,8 @@ async function testEndpointHealth() {
   const { status: s6, data: d6 } = await fetchJSON('/api/updates');
   assert(s6 === 200, 'GET /api/updates returns 200');
   assert(Array.isArray(d6.updates), 'Updates returns updates array');
+  assert(d6.updates.every(u => u.source === 'aur' || u.source === 'official'),
+    'Every update is tagged with its source (aur/official), covering both paru -Qua and checkupdates');
 }
 
 // ============================================================================

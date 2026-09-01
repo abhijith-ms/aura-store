@@ -382,7 +382,7 @@ function UpdatesTab({
       <div className="empty-state">
         <div className="empty-icon"><Sparkles size={26} strokeWidth={1.75} /></div>
         <div className="empty-title">You're up to date</div>
-        <div className="empty-desc">No AUR package updates are currently available.</div>
+        <div className="empty-desc">No package updates are currently available.</div>
       </div>
     );
   }
