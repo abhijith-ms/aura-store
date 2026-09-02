@@ -552,7 +552,9 @@ function MainApp() {
   const [activeAction, setActiveAction] = useState('install');
   const [isProcessing, setIsProcessing] = useState(false);
   const isProcessingRef = useRef(false); // live guard against overlapping ops; isProcessing state is stale inside the memoized runPackageAction closure
-  const opQueueRef = useRef([]); // FIFO of {pkgOrName, action, onFinish} waiting for the active op to finish
+  const opQueueRef = useRef([]); // FIFO of {queueId, pkgOrName, action, onFinish, displayName} waiting for the active op to finish
+  const queueIdRef = useRef(0);
+  const [queuedOps, setQueuedOps] = useState([]); // display-only mirror of opQueueRef, for the queue chip/panel
   const [opState, setOpState] = useState('idle');
   const [metrics, setMetrics] = useState({});
   const [lastError, setLastError] = useState(null);
@@ -825,7 +827,8 @@ function MainApp() {
   const runPackageAction = useCallback((pkgOrName, action, onFinish) => {
     if (isProcessingRef.current) {
       const queuedName = typeof pkgOrName === 'object' ? pkgOrName.Name : pkgOrName;
-      opQueueRef.current.push({ pkgOrName, action, onFinish });
+      opQueueRef.current.push({ queueId: ++queueIdRef.current, pkgOrName, action, onFinish, displayName: queuedName });
+      setQueuedOps([...opQueueRef.current]);
       addToast(`Queued ${queuedName} — will start once the current operation finishes.`, 'info');
       return;
     }
@@ -884,11 +887,21 @@ function MainApp() {
 
         if (opQueueRef.current.length > 0) {
           const next = opQueueRef.current.shift();
+          setQueuedOps([...opQueueRef.current]);
           runPackageAction(next.pkgOrName, next.action, next.onFinish);
         }
       },
     });
   }, [addToast, refreshPackages]);
+
+  const handleCancelQueuedOp = (queueId) => {
+    const idx = opQueueRef.current.findIndex(i => i.queueId === queueId);
+    if (idx === -1) return;
+    const [removed] = opQueueRef.current.splice(idx, 1);
+    setQueuedOps([...opQueueRef.current]);
+    addToast(`Removed ${removed.displayName} from queue.`, 'info');
+    if (removed.onFinish) removed.onFinish(false);
+  };
 
   // Execute Batch Update Queue sequentially
   useEffect(() => {
@@ -1134,6 +1147,8 @@ function MainApp() {
           opState={opState}
           metrics={metrics}
           logs={termLogs}
+          queuedOps={queuedOps}
+          onCancelQueued={handleCancelQueuedOp}
           onCancel={handleCancelInstall}
           onToggleTerminal={() => setTermOpen(o => !o)}
           terminalOpen={termOpen}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowDown, X, ChevronUp, ChevronDown } from 'lucide-react';
 import AppIcon from './AppIcon';
 import { formatBytes } from '../services/aurApi';
@@ -13,10 +13,13 @@ export default function TopProgressBar({
   opState = 'resolving',
   metrics = {},
   logs = [],
+  queuedOps = [],
+  onCancelQueued,
   onCancel,
   onToggleTerminal,
   terminalOpen,
 }) {
+  const [queueOpen, setQueueOpen] = useState(false);
   const parsedStatus = useMemo(() => {
     let phase = 'Processing…';
     if (opState === 'resolving') phase = 'Resolving package dependencies';
@@ -39,6 +42,7 @@ export default function TopProgressBar({
   if (!active) return null;
 
   const isBatch = batchTotal > 1;
+  const hasQueue = queuedOps.length > 0;
 
   return (
     <div className="top-progress-bar">
@@ -56,6 +60,16 @@ export default function TopProgressBar({
                 <span className="top-progress-batch-tag">
                   ({batchIndex + 1} of {batchTotal}{batchTotalSize > 0 && ` · ${formatBytes(batchTotalSize)} total`})
                 </span>
+              )}
+              {hasQueue && (
+                <button
+                  type="button"
+                  className="top-progress-queue-toggle"
+                  onClick={() => setQueueOpen(o => !o)}
+                  title="View queued operations"
+                >
+                  +{queuedOps.length} queued
+                </button>
               )}
             </div>
             <div className="top-progress-phase">
@@ -110,6 +124,24 @@ export default function TopProgressBar({
           style={{ width: parsedStatus.percent > 0 ? `${Math.max(parsedStatus.percent, 8)}%` : '35%' }}
         />
       </div>
+
+      {queueOpen && hasQueue && (
+        <div className="top-progress-queue-panel">
+          {queuedOps.map((item) => (
+            <div className="top-progress-queue-item" key={item.queueId}>
+              <span>{item.action === 'remove' ? 'Remove' : 'Install'}: {item.displayName}</span>
+              <button
+                type="button"
+                className="top-progress-queue-item-cancel"
+                onClick={() => onCancelQueued && onCancelQueued(item.queueId)}
+                title="Remove from queue"
+              >
+                <X size={11} strokeWidth={2} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
