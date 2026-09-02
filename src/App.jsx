@@ -551,6 +551,7 @@ function MainApp() {
   const [activePkg, setActivePkg] = useState('');
   const [activeAction, setActiveAction] = useState('install');
   const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessingRef = useRef(false); // live guard against overlapping ops; isProcessing state is stale inside the memoized runPackageAction closure
   const [opState, setOpState] = useState('idle');
   const [metrics, setMetrics] = useState({});
   const [lastError, setLastError] = useState(null);
@@ -821,11 +822,18 @@ function MainApp() {
 
   // Run single install / remove with authoritative operation model
   const runPackageAction = useCallback((pkgOrName, action, onFinish) => {
+    if (isProcessingRef.current) {
+      addToast('An operation is already in progress. Wait for it to finish before starting another.', 'error');
+      if (onFinish) onFinish(false);
+      return;
+    }
+
     const isFlathub = typeof pkgOrName === 'object' && pkgOrName?.Source === 'flathub';
     const pkgName = typeof pkgOrName === 'object' ? pkgOrName.Name : pkgOrName;
     // Flathub install/uninstall needs the reverse-DNS AppId, not the human display name.
     const installId = isFlathub ? pkgOrName.AppId : pkgName;
 
+    isProcessingRef.current = true;
     setActivePkg(pkgName);
     setActiveAction(action);
     setIsProcessing(true);
@@ -845,6 +853,7 @@ function MainApp() {
       },
       onMetrics: (m) => setMetrics(m),
       onDone: (ok, error, finalStatus, opId) => {
+        isProcessingRef.current = false;
         setIsProcessing(false);
         setAuthRequest(null);
         const status = finalStatus || (ok ? 'completed' : 'failed');
