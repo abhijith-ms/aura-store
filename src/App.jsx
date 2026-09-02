@@ -19,7 +19,8 @@ import {
   streamInstall, launchApp, cancelInstall, checkRecovery, unlockPacman,
   getActiveOperation, getServerOperationHistory, submitAuthResponse,
   getOperationHistory, addOperationHistory, isLaunchable, CATEGORIES, getAppDisplayName,
-  formatNumber, timeAgo, KNOWN_DISPLAY_NAMES, getAppSettings, formatBytes
+  formatNumber, timeAgo, KNOWN_DISPLAY_NAMES, getAppSettings, formatBytes,
+  cleanCache, openDownloadsFolder
 } from './services/aurApi';
 import { normalizeQuery } from './services/search/normalizeQuery';
 import { rankPackages } from './services/search/rankPackages';
@@ -352,10 +353,13 @@ function UpdatesTab({
   onUpdateSingle,
   onUpdateBatch,
   onShowLogs,
+  onRetry,
+  onOpenDownloads,
   batchActive,
   batchIndex,
   batchList,
   pkgStatusMap,
+  pkgErrorMap,
 }) {
   const [selected, setSelected] = useState(() => new Set(updates.map(u => u.name)));
 
@@ -480,24 +484,47 @@ function UpdatesTab({
               ) : status === 'done' ? (
                 <span className="chip chip-green" style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} strokeWidth={2.5} /> Updated</span>
               ) : status === 'failed' ? (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span className="chip chip-red" style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} strokeWidth={2.5} /> Failed</span>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={onShowLogs}
-                    title="View failure build logs"
-                  >
-                    View Logs
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => onUpdateSingle(u.name)}
-                    disabled={batchActive}
-                    title="Retry updating this package"
-                  >
-                    Retry
-                  </button>
-                </div>
+                (() => {
+                  const err = pkgErrorMap?.[u.name];
+                  const isManualDownload = err?.code === 'SOURCE_MISSING_MANUAL_DOWNLOAD';
+                  const isStaleCache = err?.code === 'STALE_BUILD_CACHE';
+                  return (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span className="chip chip-red" style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }} title={err?.message}>
+                        <X size={12} strokeWidth={2.5} /> Failed
+                      </span>
+                      {isManualDownload && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          Needs manual file: <span style={{ fontFamily: 'var(--font-mono)' }}>{err.filename}</span>
+                        </span>
+                      )}
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={onShowLogs}
+                        title="View failure build logs"
+                      >
+                        View Logs
+                      </button>
+                      {isManualDownload && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={onOpenDownloads}
+                          title="Open the folder where the file needs to go"
+                        >
+                          Open Downloads Folder
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => onRetry(u.name)}
+                        disabled={batchActive}
+                        title={isStaleCache ? 'Clear the leftover build folder and retry' : 'Retry updating this package'}
+                      >
+                        {isStaleCache ? 'Clean & Retry' : 'Retry'}
+                      </button>
+                    </div>
+                  );
+                })()
               ) : status === 'waiting' ? (
                 <span className="chip chip-gray" style={{ padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Hourglass size={12} strokeWidth={2} /> Queued</span>
               ) : (
@@ -567,6 +594,7 @@ function MainApp() {
   const [batchList, setBatchList] = useState([]);
   const [batchTotalSize, setBatchTotalSize] = useState(0);
   const [pkgStatusMap, setPkgStatusMap] = useState({});
+  const [pkgErrorMap, setPkgErrorMap] = useState({}); // last failure's error object per package, for smart retry
 
   // Recent Searches State
   const [recentSearches, setRecentSearches] = useState(() => {
@@ -883,7 +911,7 @@ function MainApp() {
           setTermLogs(prev => [...prev, { text: `✕ Failed for ${pkgName}`, type: 'error' }]);
           addToast(error?.message || `Action failed for ${pkgName}`, 'error');
         }
-        if (onFinish) onFinish(ok);
+        if (onFinish) onFinish(ok, error);
 
         if (opQueueRef.current.length > 0) {
           const next = opQueueRef.current.shift();
@@ -925,8 +953,9 @@ function MainApp() {
     const currentPkg = batchList[batchIndex];
     setPkgStatusMap(prev => ({ ...prev, [currentPkg]: 'updating' }));
 
-    runPackageAction(currentPkg, 'install', (ok) => {
+    runPackageAction(currentPkg, 'install', (ok, error) => {
       setPkgStatusMap(prev => ({ ...prev, [currentPkg]: ok ? 'done' : 'failed' }));
+      if (!ok && error) setPkgErrorMap(prev => ({ ...prev, [currentPkg]: error }));
       setBatchIndex(i => i + 1);
     });
   }, [batchActive, batchIndex, batchList, runPackageAction, addToast, refreshPackages]);
@@ -949,10 +978,46 @@ function MainApp() {
 
   const handleUpdateSingle = (pkgName) => {
     setPkgStatusMap(prev => ({ ...prev, [pkgName]: 'updating' }));
-    runPackageAction(pkgName, 'install', (ok) => {
+    runPackageAction(pkgName, 'install', (ok, error) => {
       setPkgStatusMap(prev => ({ ...prev, [pkgName]: ok ? 'done' : 'failed' }));
+      if (!ok && error) setPkgErrorMap(prev => ({ ...prev, [pkgName]: error }));
     });
   };
+
+  // Retry that self-heals known recoverable failures (e.g. a stale paru build-cache dir)
+  // instead of blindly repeating the exact command that just failed.
+  const handleRetryUpdate = async (pkgName) => {
+    const err = pkgErrorMap[pkgName];
+    if (err?.code === 'STALE_BUILD_CACHE') {
+      addToast(`Clearing leftover build folder for ${pkgName}…`, 'info');
+      const res = await cleanCache('aur', pkgName);
+      if (!res?.ok) {
+        addToast(`Failed to clear build folder for ${pkgName}.`, 'error');
+        return;
+      }
+    }
+    handleUpdateSingle(pkgName);
+  };
+
+  // Seed pkgErrorMap from server history so an update that already failed before this
+  // session started (e.g. left over from last app run) shows its real error immediately,
+  // instead of only after the user retries it once in the running session.
+  useEffect(() => {
+    if (!history || history.length === 0 || updates.length === 0) return;
+    setPkgErrorMap(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const u of updates) {
+        if (next[u.name]) continue;
+        const lastFail = history.find(h => h.pkg === u.name && h.state === 'failed' && h.error);
+        if (lastFail) {
+          next[u.name] = lastFail.error;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [updates, history]);
 
   const handleQuickInstall = (pkg) => {
     runPackageAction(pkg, 'install');
@@ -1380,10 +1445,13 @@ function MainApp() {
               onUpdateSingle={handleUpdateSingle}
               onUpdateBatch={handleUpdateBatch}
               onShowLogs={() => setTermOpen(true)}
+              onRetry={handleRetryUpdate}
+              onOpenDownloads={openDownloadsFolder}
               batchActive={batchActive}
               batchIndex={batchIndex}
               batchList={batchList}
               pkgStatusMap={pkgStatusMap}
+              pkgErrorMap={pkgErrorMap}
             />
           ) : view === 'activity' ? (
             /* Activity History Tab */
