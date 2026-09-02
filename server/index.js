@@ -89,26 +89,15 @@ async function getPacmanOwnedDesktopFiles(pkgName) {
 // ============================================================================
 // 2. Helper: Auto-link Manual Downloads (e.g. Cisco Packet Tracer, Oracle, etc.)
 // ============================================================================
-function autoLinkDownloadSources(pkg, requiredFile = null) {
+function autoLinkDownloadSources(pkg, requiredFile) {
   const downloadsDir = path.join(os.homedir(), 'Downloads');
   const cloneDir = path.join(os.homedir(), '.cache', 'paru', 'clone', pkg);
 
   try {
-    if (!fs.existsSync(cloneDir)) {
-      fs.mkdirSync(cloneDir, { recursive: true });
-    }
-
     if (!fs.existsSync(downloadsDir)) return;
     const files = fs.readdirSync(downloadsDir);
     for (const f of files) {
-      if (requiredFile && f.toLowerCase() === requiredFile.toLowerCase()) {
-        const src = path.join(downloadsDir, f);
-        const dest = path.join(cloneDir, f);
-        if (!fs.existsSync(dest)) {
-          fs.copyFileSync(src, dest);
-          console.log(`[Aura Smart Link] Auto-linked ${f} into build directory`);
-        }
-      } else if (!requiredFile && f.toLowerCase().includes(pkg.toLowerCase().replace(/-(?:bin|git)$/, ''))) {
+      if (f.toLowerCase() === requiredFile.toLowerCase()) {
         const src = path.join(downloadsDir, f);
         const dest = path.join(cloneDir, f);
         if (!fs.existsSync(dest)) {
@@ -755,11 +744,6 @@ app.get('/api/install', async (req, res) => {
 
   engine.addSubscriber(op.id, res);
   engine.setState(op.id, 'resolving');
-
-  // Pre-check and auto-link manual download sources
-  if (action === 'install' && source !== 'flathub') {
-    autoLinkDownloadSources(pkg);
-  }
 
   op.pkgSource = source === 'flathub' ? 'flathub' : 'aur';
 
