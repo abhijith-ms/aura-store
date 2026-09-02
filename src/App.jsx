@@ -552,6 +552,7 @@ function MainApp() {
   const [activeAction, setActiveAction] = useState('install');
   const [isProcessing, setIsProcessing] = useState(false);
   const isProcessingRef = useRef(false); // live guard against overlapping ops; isProcessing state is stale inside the memoized runPackageAction closure
+  const opQueueRef = useRef([]); // FIFO of {pkgOrName, action, onFinish} waiting for the active op to finish
   const [opState, setOpState] = useState('idle');
   const [metrics, setMetrics] = useState({});
   const [lastError, setLastError] = useState(null);
@@ -823,8 +824,9 @@ function MainApp() {
   // Run single install / remove with authoritative operation model
   const runPackageAction = useCallback((pkgOrName, action, onFinish) => {
     if (isProcessingRef.current) {
-      addToast('An operation is already in progress. Wait for it to finish before starting another.', 'error');
-      if (onFinish) onFinish(false);
+      const queuedName = typeof pkgOrName === 'object' ? pkgOrName.Name : pkgOrName;
+      opQueueRef.current.push({ pkgOrName, action, onFinish });
+      addToast(`Queued ${queuedName} — will start once the current operation finishes.`, 'info');
       return;
     }
 
@@ -879,6 +881,11 @@ function MainApp() {
           addToast(error?.message || `Action failed for ${pkgName}`, 'error');
         }
         if (onFinish) onFinish(ok);
+
+        if (opQueueRef.current.length > 0) {
+          const next = opQueueRef.current.shift();
+          runPackageAction(next.pkgOrName, next.action, next.onFinish);
+        }
       },
     });
   }, [addToast, refreshPackages]);
