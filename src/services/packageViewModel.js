@@ -58,6 +58,8 @@ export function createPackageViewModel(pkg, context = {}) {
   // label instead of blending into "Official Arch Repository".
   const isChaoticAur = isOfficial && (pkg.Repository || '').toLowerCase() === 'chaotic-aur';
   const isFlathub = pkg.Source === 'flathub';
+  const isAppImageHub = pkg.Source === 'appimagehub';
+  const isGithubRelease = pkg.Source === 'github';
   const source = isChaoticAur
     ? {
         type: 'chaotic-aur',
@@ -79,6 +81,20 @@ export function createPackageViewModel(pkg, context = {}) {
         fullName: 'Flathub',
         description: 'Sandboxed app distributed via Flatpak, isolated from the rest of the system',
       }
+    : isAppImageHub
+    ? {
+        type: 'appimagehub',
+        label: 'AppImageHub',
+        fullName: 'AppImageHub',
+        description: 'Portable .AppImage — no package manager, sandboxing, or dependency install involved',
+      }
+    : isGithubRelease
+    ? {
+        type: 'github',
+        label: 'GitHub',
+        fullName: 'GitHub Releases',
+        description: 'Portable .AppImage from the project\'s own GitHub Releases, added manually',
+      }
     : {
         type: 'aur',
         label: 'AUR',
@@ -95,8 +111,9 @@ export function createPackageViewModel(pkg, context = {}) {
   const upstream = {
     homepage: pkg.URL || null,
     source: pkg.PackageBase ? `https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=${encodeURIComponent(pkg.PackageBase)}` : null,
-    aur: (isOfficial || isFlathub) ? null : `https://aur.archlinux.org/packages/${encodeURIComponent(pkgName)}`,
+    aur: (isOfficial || isFlathub || isAppImageHub || isGithubRelease) ? null : `https://aur.archlinux.org/packages/${encodeURIComponent(pkgName)}`,
     flathub: isFlathub ? `https://flathub.org/apps/${encodeURIComponent(pkg.AppId || pkgName)}` : null,
+    github: (isAppImageHub || isGithubRelease) && pkg.Owner && pkg.Repo ? `https://github.com/${pkg.Owner}/${pkg.Repo}` : null,
   };
 
   // 4. Dependencies categorized accurately by metadata fields
@@ -117,7 +134,7 @@ export function createPackageViewModel(pkg, context = {}) {
   const metadata = {
     version: pkg.Version || null,
     packageBase: pkg.PackageBase || pkgName,
-    maintainer: pkg.Maintainer || ((isOfficial || isFlathub) ? null : 'None (Orphaned)'),
+    maintainer: pkg.Maintainer || ((isOfficial || isFlathub || isAppImageHub || isGithubRelease) ? null : 'None (Orphaned)'),
     verified: Boolean(pkg.Verified),
     installsLastMonth: pkg.InstallsLastMonth || 0,
     license: pkg.License && pkg.License.length > 0 ? pkg.License.join(', ') : null,

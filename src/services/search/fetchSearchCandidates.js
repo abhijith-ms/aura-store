@@ -7,7 +7,7 @@
  *   - Combines and deduplicates candidate pool before ranking
  */
 
-import { searchPackages, searchOfficialPackages, searchFlathubPackages, getMultiplePackageInfo } from '../aurApi.js';
+import { searchPackages, searchOfficialPackages, searchFlathubPackages, searchAppImageHubPackages, getMultiplePackageInfo } from '../aurApi.js';
 import { normalizeQuery } from './normalizeQuery.js';
 import { resolveQueryIdentity } from './applicationIdentity.js';
 
@@ -44,10 +44,12 @@ export async function fetchSearchCandidates(rawQuery, sortBy = 'name-desc') {
   const aurFetches = [...queriesToRun].map(q => searchPackages(q, sortBy).catch(() => []));
   const officialFetch = searchOfficialPackages(rawQuery.trim()).catch(() => []);
   const flathubFetch = searchFlathubPackages(rawQuery.trim()).catch(() => []);
-  const [aurResults, officialResults, flathubResults] = await Promise.all([
+  const appImageHubFetch = searchAppImageHubPackages(rawQuery.trim()).catch(() => []);
+  const [aurResults, officialResults, flathubResults, appImageHubResults] = await Promise.all([
     Promise.all(aurFetches),
     officialFetch,
     flathubFetch,
+    appImageHubFetch,
   ]);
 
   // Combine and deduplicate by package Name. Official repo results take
@@ -69,6 +71,12 @@ export async function fetchSearchCandidates(rawQuery, sortBy = 'name-desc') {
     if (pkg?.Name && !candidateMap.has(pkg.Name)) {
       candidateMap.set(pkg.Name, pkg);
     }
+  }
+  // AppImageHub app names can collide with an AUR/official package name
+  // (e.g. both ship something called "obs") — since both are real, distinct
+  // candidates, key by Source+Name instead of Name alone so neither is dropped.
+  for (const pkg of appImageHubResults) {
+    if (pkg?.Name) candidateMap.set(`appimagehub:${pkg.Name}`, pkg);
   }
 
   // 3. Ensure canonical packages for resolved identity are in candidate pool

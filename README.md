@@ -54,7 +54,7 @@ v4.0  ── Native App Packaging & Arch PKGBUILD (Single-process runtime, nativ
   ↓
 v4.0.1 ── Background Update Checking (Silent 30-minute re-check, desktop notifications for newly-available updates)
   ↓
-v5.0  ── Universal Multi-Source Ecosystem (Official Arch Repos, Flathub, Chaotic-AUR merged into one ranked search) [CURRENT — AppImageHub & GitHub Releases still open]
+v5.0  ── Universal Multi-Source Ecosystem (Official Arch Repos, Flathub, Chaotic-AUR, AppImageHub, GitHub Releases — all merged into one ranked search)
 ```
 
 ---
@@ -260,9 +260,9 @@ makepkg -si
 * [x] **v4.0.1** — Background Update Checking (30-minute silent re-check + desktop notifications for newly-available updates, toggleable in Settings)
 * [ ] **v4.1** — Real Arch User Testing & Feedback Loop
 * [ ] **v4.2** — Public Release
-* [~] **v5.0** — Universal Multi-Source Ecosystem
+* [x] **v5.0** — Universal Multi-Source Ecosystem
   * [x] Official Arch Repositories (core/extra/multilib & distro-added repos via `pacman -Ss`/`-Si`, merged into search ranking, source badges in UI)
   * [x] Flathub (search/browse/install/uninstall via Flathub's v2 API + `flatpak`, scope-aware install, verified badges, sandboxed apps distinct from AUR/official)
-  * [ ] AppImageHub
+  * [x] AppImageHub (community catalog via `feed.json`, installs resolve the latest GitHub-release `.AppImage` asset — no package manager, tracked in `manual-installs.json`)
   * [x] Chaotic-AUR (distinct orange "Chaotic-AUR" badge + accurate "community-built, not Arch-signed" copy, instead of blending into the generic Official badge)
-  * [ ] GitHub Releases
+  * [x] GitHub Releases (manual "Add from GitHub" by owner/repo, same portable-`.AppImage` install path as AppImageHub, update-checked against the repo's latest release)
