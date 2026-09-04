@@ -47,6 +47,29 @@ export const getFlathubPackageInfo = async (appId) => {
   return data.results?.[0] || null;
 };
 
+// AppImageHub (community catalog of portable .AppImage apps).
+export const searchAppImageHubPackages = async (q) => {
+  if (!q?.trim()) return [];
+  const res = await fetch(`${API}/api/search/appimagehub?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+  return data.results || [];
+};
+
+export const getAppImageHubPackageInfo = async (appId) => {
+  const res = await fetch(`${API}/api/info/appimagehub?appId=${encodeURIComponent(appId)}`);
+  const data = await res.json();
+  return data.results?.[0] || null;
+};
+
+// Manual "Add from GitHub" — validates owner/repo has a .AppImage release
+// asset before it's added anywhere.
+export const lookupGithubRelease = async (owner, repo) => {
+  const res = await fetch(`${API}/api/github/lookup?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Lookup failed');
+  return data.result;
+};
+
 export const getPackageInfo = async (pkg) => {
   const res = await fetch(`${API}/api/info?pkg=${encodeURIComponent(pkg)}`);
   const data = await res.json();

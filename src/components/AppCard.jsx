@@ -11,6 +11,9 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
   // the generic "Official" one.
   const isChaoticAur = isOfficial && (pkg.Repository || '').toLowerCase() === 'chaotic-aur';
   const isFlathub = pkg.Source === 'flathub';
+  const isAppImageHub = pkg.Source === 'appimagehub';
+  const isGithubRelease = pkg.Source === 'github';
+  const isPortable = isAppImageHub || isGithubRelease;
   // Flathub identifies apps by AppId (org.mozilla.firefox), not the display name.
   const isInstalled = installed.has(isFlathub ? (pkg.AppId || pkg.Name) : pkg.Name);
   const displayName = getAppDisplayName(pkg.Name);
@@ -40,11 +43,11 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
       onClick={() => onSelect(pkg)}
     >
       <div className="card-top">
-        <AppIcon pkgName={pkg.Name} iconName={desktopEntries[0]?.icon || null} iconUrl={isFlathub ? pkg.IconUrl : null} size="md" installed={isInstalled} />
+        <AppIcon pkgName={pkg.Name} iconName={desktopEntries[0]?.icon || null} iconUrl={isFlathub || isPortable ? pkg.IconUrl : null} size="md" installed={isInstalled} />
         <div className="card-title-block">
           <div className="card-name">{displayName}</div>
           <div className="card-version">
-            {isFlathub ? pkg.AppId : isCustomName ? pkg.Name : `v${pkg.Version}`}
+            {isFlathub ? pkg.AppId : isPortable ? (pkg.Version || `${pkg.Owner}/${pkg.Repo}`) : isCustomName ? pkg.Name : `v${pkg.Version}`}
           </div>
         </div>
         {isChaoticAur ? (
@@ -53,6 +56,10 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
           <span className="chip chip-green" style={{ fontSize: 10 }} title={`Official Arch repository: ${pkg.Repository}`}>{pkg.Repository}</span>
         ) : isFlathub ? (
           <span className="chip chip-indigo" style={{ fontSize: 10 }} title="Sandboxed app via Flathub">Flathub</span>
+        ) : isAppImageHub ? (
+          <span className="chip chip-purple" style={{ fontSize: 10 }} title="Portable .AppImage from the AppImageHub catalog">AppImageHub</span>
+        ) : isGithubRelease ? (
+          <span className="chip chip-gray" style={{ fontSize: 10 }} title="Portable .AppImage from the project's GitHub Releases">GitHub</span>
         ) : pkg.OutOfDate && (
           <span className="chip chip-orange" style={{ fontSize: 10, display: 'flex', alignItems: 'center' }} title="Flagged out of date in AUR"><AlertTriangle size={11} strokeWidth={2} /></span>
         )}
@@ -76,6 +83,11 @@ export default function AppCard({ pkg, installed, installedInfo, onSelect, onQui
             <div className="stat" title="Sandboxed via Flatpak">
               <Package size={12} strokeWidth={2} />
               <span>Sandboxed</span>
+            </div>
+          ) : isPortable ? (
+            <div className="stat" title="Runs standalone, no install/dependencies via a package manager">
+              <Box size={12} strokeWidth={2} />
+              <span>Portable</span>
             </div>
           ) : (
             <>

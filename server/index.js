@@ -17,6 +17,10 @@ import {
 } from './maintenance.js';
 import { searchOfficialRepos, getOfficialPackageInfo } from './officialRepo.js';
 import { searchFlathub, getFlathubAppInfo, getFlathubInstallScope, buildFlathubCommand } from './flathub.js';
+import { searchAppImageHub, getAppImageHubInfo } from './appimagehub.js';
+import { getRepoMeta, resolveLatestAppImageAsset } from './githubReleases.js';
+import { installManualApp, uninstallManualApp, checkManualInstallUpdates } from './manualInstallEngine.js';
+import { listManualInstalls, getManualInstall } from './manualInstalls.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -309,7 +313,18 @@ class OperationEngine {
     //   Install/Update: exit 0 AND pacman -Q finds package AND version matches
     //   Remove:         exit 0 AND pacman -Q no longer finds package
     //   Cancelled/Failed: not_applicable
-    if (finalStatus === 'completed' && (op.action === 'install' || op.action === 'update')) {
+    if (finalStatus === 'completed' && (op.pkgSource === 'appimagehub' || op.pkgSource === 'github')) {
+      // No package manager to query — verify the binary's actual presence/
+      // absence on disk matches what this operation was supposed to do.
+      const exists = op.binPath ? fs.existsSync(op.binPath) : false;
+      const wantsPresent = op.action !== 'remove';
+      op.verification = {
+        status: exists === wantsPresent ? 'verified' : 'not_verified',
+        method: 'filesystem-check',
+        verifiedAt: Date.now(),
+        installedVersion: null,
+      };
+    } else if (finalStatus === 'completed' && (op.action === 'install' || op.action === 'update')) {
       try {
         const { stdout } = await execAsync(`pacman -Q ${op.pkg} 2>/dev/null`);
         const parts = stdout.trim().split(' ');
@@ -573,6 +588,62 @@ app.get('/api/info/flathub', async (req, res) => {
   }
 });
 
+// --- AppImageHub (community catalog of portable .AppImage apps) ---
+app.get('/api/search/appimagehub', async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 1) return res.json({ results: [] });
+  try {
+    const results = await searchAppImageHub(q);
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/info/appimagehub', async (req, res) => {
+  const { appId } = req.query;
+  if (!appId) return res.status(400).json({ error: 'appId required' });
+  try {
+    const info = await getAppImageHubInfo(appId);
+    res.json({ results: info ? [info] : [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Manual GitHub Releases add: user pastes owner/repo, we validate it has
+// a .AppImage asset before it's added anywhere ---
+app.get('/api/github/lookup', async (req, res) => {
+  const { owner, repo } = req.query;
+  if (!owner || !repo) return res.status(400).json({ error: 'owner and repo required' });
+  try {
+    const [meta, asset] = await Promise.all([
+      getRepoMeta(owner, repo),
+      resolveLatestAppImageAsset(owner, repo),
+    ]);
+    if (!meta) return res.status(404).json({ error: `Repo ${owner}/${repo} not found` });
+    if (!asset) {
+      return res.status(404).json({ error: `${owner}/${repo} has no .AppImage in its latest release` });
+    }
+    res.json({
+      result: {
+        Name: meta.name,
+        AppId: `${owner}/${repo}`,
+        Version: asset.version,
+        Description: meta.description,
+        Source: 'github',
+        IconUrl: meta.avatarUrl,
+        URL: meta.homepage,
+        Owner: owner,
+        Repo: repo,
+        Installable: true,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- Installed packages with real system Desktop Entry verification ---
 app.get('/api/installed', async (req, res) => {
   try {
@@ -607,8 +678,24 @@ app.get('/api/installed', async (req, res) => {
       });
     }
 
+    // AppImageHub/GitHub-Releases installs: not tracked by pacman/flatpak at
+    // all, so their only record is manual-installs.json.
+    for (const entry of listManualInstalls()) {
+      aur.push({
+        name: entry.name,
+        version: entry.version,
+        source: entry.source,
+        isLaunchable: true,
+        desktopFile: entry.desktopPath ? path.basename(entry.desktopPath) : null,
+        icon: entry.iconPath,
+        desktopEntries: [],
+        manualInstallId: entry.id,
+      });
+    }
+
     const allSet = new Set(allPkgs.trim().split('\n').filter(Boolean).map(l => l.split(' ')[0]));
     for (const appId of flatpakApps.trim().split('\n').filter(Boolean)) allSet.add(appId);
+    for (const entry of listManualInstalls()) allSet.add(entry.name);
     res.json({ aur, allInstalled: [...allSet] });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -673,7 +760,17 @@ app.get('/api/updates', async (req, res) => {
       u.installSize = s?.installSize ?? null;
     });
 
-    res.json({ updates: [...aurUpdates, ...officialUpdates] });
+    const manualUpdates = (await checkManualInstallUpdates().catch(() => [])).map(u => ({
+      name: u.name,
+      current: u.currentVersion,
+      latest: u.newVersion,
+      source: u.source,
+      manualInstallId: u.id,
+      downloadSize: null,
+      installSize: null,
+    }));
+
+    res.json({ updates: [...aurUpdates, ...officialUpdates, ...manualUpdates] });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -745,7 +842,76 @@ app.get('/api/install', async (req, res) => {
   engine.addSubscriber(op.id, res);
   engine.setState(op.id, 'resolving');
 
-  op.pkgSource = source === 'flathub' ? 'flathub' : 'aur';
+  op.pkgSource = source === 'flathub' ? 'flathub' : source === 'appimagehub' ? 'appimagehub' : source === 'github' ? 'github' : 'aur';
+
+  // AppImageHub / GitHub Releases: no package manager involved — this is a
+  // plain HTTPS download + filesystem integration, not a spawned CLI process,
+  // so it's driven through the engine manually instead of via child.stdout.
+  if (source === 'appimagehub' || source === 'github') {
+    if (action === 'remove') {
+      engine.setState(op.id, 'installing');
+      op.binPath = getManualInstall(pkg)?.binPath || null;
+      const result = uninstallManualApp(pkg);
+      if (result.ok) {
+        await engine.finishOperation(op.id, 'completed');
+      } else {
+        await engine.finishOperation(op.id, 'failed', {
+          code: 'MANUAL_UNINSTALL_FAILED',
+          message: result.error,
+          stage: 'installing',
+          recoverable: false,
+          suggestedAction: 'show_logs',
+        });
+      }
+      return res.end();
+    }
+
+    engine.setState(op.id, 'downloading');
+    try {
+      let appInfo;
+      if (source === 'appimagehub') {
+        const info = await getAppImageHubInfo(pkg);
+        if (!info || !info.Installable || !info._asset) {
+          throw Object.assign(new Error('No .AppImage release asset available'), { code: 'NO_APPIMAGE_ASSET' });
+        }
+        appInfo = {
+          id: info.AppId, name: info.Name, description: info.Description, iconUrl: info.IconUrl,
+          source: 'appimagehub', owner: info.Owner, repo: info.Repo,
+          version: info._asset.version, assetUrl: info._asset.assetUrl,
+        };
+      } else {
+        const [owner, repo] = pkg.split('/');
+        const [meta, asset] = await Promise.all([getRepoMeta(owner, repo), resolveLatestAppImageAsset(owner, repo)]);
+        if (!meta || !asset) {
+          throw Object.assign(new Error('No .AppImage release asset available'), { code: 'NO_APPIMAGE_ASSET' });
+        }
+        appInfo = {
+          id: `${owner}/${repo}`, name: meta.name, description: meta.description, iconUrl: meta.avatarUrl,
+          source: 'github', owner, repo, version: asset.version, assetUrl: asset.assetUrl,
+        };
+      }
+
+      const record = await installManualApp(appInfo, ({ percent, downloaded, total }) => {
+        engine.setMetrics(op.id, {
+          percent,
+          downloaded: total ? `${Math.round(downloaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB` : null,
+          speed: null,
+        });
+      });
+      op.binPath = record.binPath;
+      engine.setState(op.id, 'installing');
+      await engine.finishOperation(op.id, 'completed');
+    } catch (err) {
+      await engine.finishOperation(op.id, 'failed', {
+        code: err.code || 'MANUAL_INSTALL_FAILED',
+        message: err.message,
+        stage: op.stage,
+        recoverable: false,
+        suggestedAction: 'show_logs',
+      });
+    }
+    return res.end();
+  }
 
   let cmd, args;
   if (source === 'flathub') {

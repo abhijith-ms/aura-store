@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Check, X, AlertTriangle, Info, History, Ban, ChevronUp, ChevronDown,
   ExternalLink, Package, Sparkles, ArrowRight, RotateCcw, Lock, SearchX,
-  Hourglass, Search,
+  Hourglass, Search, GitBranch,
 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AppCard from './components/AppCard';
@@ -12,6 +12,7 @@ import TopProgressBar from './components/TopProgressBar';
 import AppIcon from './components/AppIcon';
 import CommandPalette from './components/search/CommandPalette';
 import AuthModal from './components/AuthModal';
+import GithubAddModal from './components/GithubAddModal';
 import SettingsTab from './components/SettingsTab';
 import { ThemeProvider } from './context/ThemeContext';
 import {
@@ -297,7 +298,9 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
             return (
               <div
                 key={pkg.name}
-                onClick={() => onSelect({ Name: pkg.name, Version: pkg.version, Description: 'Locally installed AUR package' })}
+                onClick={() => onSelect(pkg.manualInstallId
+                  ? { Name: pkg.name, Version: pkg.version, Description: 'Manually installed app', Source: pkg.source, AppId: pkg.manualInstallId }
+                  : { Name: pkg.name, Version: pkg.version, Description: 'Locally installed AUR package' })}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -332,7 +335,9 @@ function InstalledTab({ packages, onSelect, onLaunch, addToast }) {
                   )}
                   <button
                     className="btn btn-ghost btn-sm"
-                    onClick={() => onSelect({ Name: pkg.name, Version: pkg.version, Description: 'Locally installed AUR package' })}
+                    onClick={() => onSelect(pkg.manualInstallId
+                  ? { Name: pkg.name, Version: pkg.version, Description: 'Manually installed app', Source: pkg.source, AppId: pkg.manualInstallId }
+                  : { Name: pkg.name, Version: pkg.version, Description: 'Locally installed AUR package' })}
                     title="View package details"
                   >
                     Details
@@ -474,6 +479,8 @@ function UpdatesTab({
                 </div>
               ) : u.source === 'aur' ? (
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>Built from source</div>
+              ) : (u.source === 'appimagehub' || u.source === 'github') ? (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>New .AppImage</div>
               ) : null}
 
               {/* Status Indicator */}
@@ -607,6 +614,7 @@ function MainApp() {
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [authRequest, setAuthRequest] = useState(null);
+  const [githubAddOpen, setGithubAddOpen] = useState(false);
 
   const addRecentSearch = useCallback((q) => {
     if (!q || q.trim().length < 2) return;
@@ -862,9 +870,12 @@ function MainApp() {
     }
 
     const isFlathub = typeof pkgOrName === 'object' && pkgOrName?.Source === 'flathub';
+    const source = typeof pkgOrName === 'object' ? pkgOrName?.Source : undefined;
+    const usesAppId = isFlathub || source === 'appimagehub' || source === 'github';
     const pkgName = typeof pkgOrName === 'object' ? pkgOrName.Name : pkgOrName;
-    // Flathub install/uninstall needs the reverse-DNS AppId, not the human display name.
-    const installId = isFlathub ? pkgOrName.AppId : pkgName;
+    // Flathub/AppImageHub/GitHub install-remove needs the AppId (reverse-DNS,
+    // or owner/repo), not the human display name.
+    const installId = usesAppId ? pkgOrName.AppId : pkgName;
 
     isProcessingRef.current = true;
     setActivePkg(pkgName);
@@ -876,7 +887,7 @@ function MainApp() {
     setTermLogs([]);
 
     streamInstall(installId, action, {
-      source: isFlathub ? 'flathub' : undefined,
+      source: source === 'flathub' || source === 'appimagehub' || source === 'github' ? source : undefined,
       onLog: (log, type) => setTermLogs(prev => [...prev, { text: log, type: type || 'log' }]),
       onAuthRequired: (data) => setAuthRequest(data),
       onStateChange: (event, opId) => {
@@ -953,7 +964,7 @@ function MainApp() {
     const currentPkg = batchList[batchIndex];
     setPkgStatusMap(prev => ({ ...prev, [currentPkg]: 'updating' }));
 
-    runPackageAction(currentPkg, 'install', (ok, error) => {
+    runPackageAction(updateInstallTarget(currentPkg), 'install', (ok, error) => {
       setPkgStatusMap(prev => ({ ...prev, [currentPkg]: ok ? 'done' : 'failed' }));
       if (!ok && error) setPkgErrorMap(prev => ({ ...prev, [currentPkg]: error }));
       setBatchIndex(i => i + 1);
@@ -976,9 +987,20 @@ function MainApp() {
     addToast(`Starting batch update for ${pkgList.length} packages…`, 'info');
   };
 
+  // The Updates tab is keyed purely by name string (pkgStatusMap, batchList),
+  // but appimagehub/github updates need Source+AppId to install correctly —
+  // look the matching update entry back up rather than restructuring that.
+  const updateInstallTarget = (pkgName) => {
+    const u = updates.find(x => x.name === pkgName);
+    if (u && (u.source === 'appimagehub' || u.source === 'github')) {
+      return { Name: u.name, Source: u.source, AppId: u.manualInstallId };
+    }
+    return pkgName;
+  };
+
   const handleUpdateSingle = (pkgName) => {
     setPkgStatusMap(prev => ({ ...prev, [pkgName]: 'updating' }));
-    runPackageAction(pkgName, 'install', (ok, error) => {
+    runPackageAction(updateInstallTarget(pkgName), 'install', (ok, error) => {
       setPkgStatusMap(prev => ({ ...prev, [pkgName]: ok ? 'done' : 'failed' }));
       if (!ok && error) setPkgErrorMap(prev => ({ ...prev, [pkgName]: error }));
     });
@@ -1158,6 +1180,14 @@ function MainApp() {
                 <option value="lastmodified">Recently Updated</option>
               </select>
             )}
+            <button
+              className="header-btn"
+              title="Add an app from its GitHub Releases"
+              onClick={() => setGithubAddOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <GitBranch size={15} strokeWidth={2} />
+            </button>
             <button
               className="header-btn"
               title="Refresh package data"
@@ -1476,6 +1506,16 @@ function MainApp() {
         installing={isProcessing}
         packageName={activePkg}
       />
+
+      {githubAddOpen && (
+        <GithubAddModal
+          onClose={() => setGithubAddOpen(false)}
+          onFound={(result) => {
+            setGithubAddOpen(false);
+            setSelectedPkg(result);
+          }}
+        />
+      )}
 
       {/* In-App Sudo Authentication Modal */}
       {authRequest && (
